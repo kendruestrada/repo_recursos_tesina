@@ -1,0 +1,25 @@
+{
+  "name": "aws-sam-user-registration",
+  "version": "1.0.0",
+  "description": "AWS SAM User Registration System",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-ses": "^3.0.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.0",
+    "typescript": "^5.0.0"
+  }
+}

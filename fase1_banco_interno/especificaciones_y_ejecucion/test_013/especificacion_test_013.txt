@@ -1,0 +1,55 @@
+Síntoma Reportado:
+"La aplicación funciona bien los primeros 10 minutos después del deploy, luego empieza a dar timeouts aleatorios"
+
+Flujo del Error:
+1. Lambda DataProcessor se conecta a RDS PostgreSQL
+2. Usa librería psycopg2 con connection pooling en GLOBAL scope:
+```python
+   # Global scope - se inicializa una vez por container
+   connection_pool = psycopg2.pool.SimpleConnectionPool(
+       minconn=1,
+       maxconn=5,
+       database="prod"
+   )
+   
+   def lambda_handler(event, context):
+       conn = connection_pool.getconn()  # Toma conexión del pool
+       # Procesa datos...
+       # OLVIDA hacer: connection_pool.putconn(conn)
+       return result
+```
+3. Cada invocación del Lambda toma una conexión pero NO la devuelve al pool
+4. Después de 5 invocaciones en el mismo container, el pool está exhausted
+5. Sexta invocación intenta getconn() pero no hay conexiones disponibles
+6. getconn() se queda esperando indefinidamente (no hay timeout configurado)
+7. Lambda hace timeout después de 30 segundos
+8. CloudWatch muestra: "Task timed out after 30.00 seconds"
+9. Error parece aleatorio porque depende de qué containers reusen y cuántas veces
+
+Causa Raíz:
+- Conexiones de pool no se devuelven (falta putconn() en finally block)
+- Connection pool en global scope se comparte entre invocaciones del mismo container
+- No hay timeout en getconn() para fail-fast
+- No hay monitoring de pool exhaustion
+- Lambda container reuse hace que el problema sea acumulativo
+- Warm containers fallan después de 5 invocaciones, cold containers funcionan 5 veces
+
+Desafío para MCP:
+- Debe buscar logs del mismo container a través del tiempo (mismo container_id)
+- Debe contar invocaciones por container (ver que falla en la 6ta)
+- Debe buscar código para ver el connection pool
+- Debe identificar que los cold starts siempre funcionan
+- Debe correlacionar que el timeout es siempre después de 30s exactos (no variable)
+- Debe buscar métricas de RDS (conexiones activas crecientes)
+
+Desafío sin-MCP:
+- El síntoma es "timeouts aleatorios" sin patrón obvio
+- ¿Qué logs pasar? El error parece no determinístico
+- Sin contar invocaciones por container, imposible ver el patrón
+- Necesitaría logs de múltiples invocaciones + RDS metrics
+
+Preguntas:
+2.- La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios.
+3.- La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios. la aplicación deberia funcionar como sigue:
+- La aplicacion expone un endpoint en una api rest
+- El endpoint recibe el payload de la llamada y lo responde

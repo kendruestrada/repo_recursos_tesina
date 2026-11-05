@@ -1,0 +1,70 @@
+Síntoma Reportado:
+"Al transferir fondos entre cuentas, a veces el dinero 'desaparece'"
+
+Flujo del Error:
+1. Lambda TransferApiFunction hace dos operaciones en DynamoDB:
+   - UpdateItem: CuentaOrigen.balance -= 100
+   - UpdateItem: CuentaDestino.balance += 100
+2. Ambas operaciones son exitosas (HTTP 200)
+3. Pero DynamoDB usa eventual consistency
+4. Si otra llamada concurrente lee ambas cuentas DURANTE la propagación:
+   - Lee CuentaOrigen con balance YA descontado
+   - Lee CuentaDestino con balance AÚN NO sumado
+5. El saldo total entre cuentas queda inconsistente
+
+Causa Raíz:
+- No se usa transacción (TransactWriteItems) para operación atómica
+- TransferApiFunction lee con eventual consistency en vez de strong consistency
+
+Desafío para MCP:
+- Debe entender que no hubo error técnico, sino problema de consistencia
+- Debe correlacionar timestamps
+- Debe entender el concepto de transaccionalidad
+
+Desafío sin-MCP:
+- El síntoma es "dinero desaparecido" pero técnicamente no hay error en logs
+
+
+-----
+# Para generar el error:
+# - hacer llamadas concurrentes al servicio
+# - ejemplo de llamada en './test.sh'
+
+# llamadas concurrentes con vegeta:
+```
+vegeta attack -duration=1s -rate=25 -targets=testing/target.list | tee results.bin | vegeta report
+```
+
+# resultados
+```
+Requests      [total, rate, throughput]         100, 101.03, 4.41
+Duration      [total, attack, wait]             11.781s, 989.77ms, 10.791s
+Latencies     [min, mean, 50, 90, 95, 99, max]  6.882s, 10.141s, 10.387s, 10.993s, 11.021s, 11.086s, 11.106s
+Bytes In      [total, mean]                     683392, 6833.92
+Bytes Out     [total, mean]                     57700, 577.00
+Success       [ratio]                           52.00%
+Status Codes  [code:count]                      207:52  500:24  502:24
+Error Set:
+500 Internal Server Error
+502 Bad Gateway
+```
+
+# dinero faltante (deberia sumar 10000, pero suma 9990):
+
+```
+    "Balance": 8960,
+    "AccountId": "ACC001"
+
+    ---
+    "Balance": 1030,
+    "AccountId": "ACC002"
+```
+
+Preguntas:
+2.- Al transferir fondos entre cuentas, a veces el dinero 'desaparece'
+3.- Al transferir fondos entre cuentas, a veces el dinero 'desaparece, Flujo correcto de aplicación:
+- El usuario solicita la transferencia.
+- El sistema "congela" ambas cuentas en una sola operación.
+- El dinero sale de una y entra en la otra simultáneamente.
+- Cualquier revisión de saldo espera a que movimientos terminen antes de mostrar la información.
+Resultado: El dinero nunca desaparece de la vista del sistema ni del usuario.

@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DataProcessorService-t13
+
+Resources:
+  DataProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: data-processor-t13
+      CodeUri: app/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Timeout: 30
+      MemorySize: 256
+      Events:
+        PostData:
+          Type: Api
+          Properties:
+            Path: /process
+            Method: post
+
+  DataProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: "/aws/lambda/data-processor-t13"
+      RetentionInDays: 7
+
+Outputs:
+  ApiEndpoint:
+    Description: "Endpoint para pruebas"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/process"

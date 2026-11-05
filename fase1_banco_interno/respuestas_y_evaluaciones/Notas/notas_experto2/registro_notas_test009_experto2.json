@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-1.md",
+    "nombre": "Test009-1.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-06 13:11"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-2.md",
+    "nombre": "Test009-2.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-06 13:27"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-3.md",
+    "nombre": "Test009-3.md",
+    "puntuacion": 3,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-06 13:38"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-4.md",
+    "nombre": "Test009-4.md",
+    "puntuacion": 3,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-06 13:56"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-5.md",
+    "nombre": "Test009-5.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-06 14:09"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-6.md",
+    "nombre": "Test009-6.md",
+    "puntuacion": 3,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 2,
+    "fecha": "2026-03-06 14:22"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-7.md",
+    "nombre": "Test009-7.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 1,
+    "realidad_diagnostico_(nivel_alucinacion)": 2,
+    "fecha": "2026-03-06 14:39"
+  },
+  {
+    "archivo": "C:/Users/lliza/Downloads/Test009-8.md",
+    "nombre": "Test009-8.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-06 14:51"
+  }
+]

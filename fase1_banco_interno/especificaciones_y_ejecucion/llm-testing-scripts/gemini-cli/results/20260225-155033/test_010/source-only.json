@@ -1,0 +1,54 @@
+{
+  "session_id": "fff0628e-ebee-48b2-821e-6d7054a26dcf",
+  "response": "## [Titulo]: Falla en flujo por excepción de tipo (TypeError) al procesar registros incompletos en el DynamoDB Stream\n### Resumen: La función encargada del envío de correos se rompe al intentar acceder directamente a la propiedad `.S` de atributos que pueden venir indefinidos, evadiendo la validación de errores programada.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir: Insertar o modificar un ítem en la tabla de base de datos DynamoDB donde se omita intencionalmente alguno de los campos (`email`, `first_name`, `last_name` o `birth_date`). El evento activará la función Lambda del servicio de correos que procesa el stream y fallará de inmediato.\n- Esperado vs. Actual: El comportamiento esperado es que la aplicación detecte la falta de datos críticos como el `email` o `first_name`, emita un aviso mediante `console.warn` y continúe con el siguiente registro. El comportamiento actual arroja una excepción no manejada de la forma `TypeError: Cannot read properties of undefined (reading 'S')`, dado que se evalúa la extracción de la propiedad antes de la condición de validación. Al presentarse una falla no controlada, DynamoDB Streams reintentará el lote de manera infinita paralizando los envíos (Poison Pill).\n- Ubicacion del error: Fichero `src/handlers/email.ts`, función `handler` (en la etapa de asignación de variables extrayendo desde `newImage`).\n- Logs relevantes: Si bien no se suministran logs en este entorno aislado, la excepción visible en CloudWatch ante este fallo indicaría la caída por lectura de propiedades indefinidas en la ejecución de la Lambda.\n### Propuesta de Solucion\nSe debe implementar *optional chaining* (encadenamiento opcional) en la extracción de los valores provenientes de `newImage` en el evento de la base de datos, de forma que el acceso a `.S` sea seguro en caso de que el nodo de ese atributo no exista. \n\nModificar en `src/handlers/email.ts` las asignaciones de la siguiente forma:\n```typescript\n      const email = newImage.email?.S;\n      const firstName = newImage.first_name?.S;\n      const lastName = newImage.last_name?.S;\n      const birthDate = newImage.birth_date?.S;\n```\nDe esta manera las variables correspondientes a atributos inexistentes adoptarán el valor `undefined` sin lanzar una excepción y el código de manejo de errores subsecuente (`if (!email || !firstName)`) evaluará la condición correctamente permitiendo al sistema descartar el registro sin afectar el funcionamiento general.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 5,
+          "totalErrors": 0,
+          "totalLatencyMs": 258058
+        },
+        "tokens": {
+          "input": 33864,
+          "prompt": 119153,
+          "candidates": 884,
+          "total": 141109,
+          "cached": 85289,
+          "thoughts": 21072,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 4,
+      "totalSuccess": 4,
+      "totalFail": 0,
+      "totalDurationMs": 306,
+      "totalDecisions": {
+        "accept": 4,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "run_shell_command": {
+          "count": 4,
+          "success": 4,
+          "fail": 0,
+          "durationMs": 306,
+          "decisions": {
+            "accept": 4,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

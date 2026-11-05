@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test007/Test007-1.md",
+    "nombre": "Test007-1.md",
+    "puntuacion": 3,
+    "comentario": "Alucina con un error de la variable STATUS_CHECK_URL mal configurada (yo veo todo bien y no encontre en los llogs evidencia de lo que dice)",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-09 11:14"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-2.md",
+    "nombre": "Test007-2.md",
+    "puntuacion": 2,
+    "comentario": "habla de fallo pero no encuentra la condicion erronea",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-09 11:18"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-3.md",
+    "nombre": "Test007-3.md",
+    "puntuacion": 4,
+    "comentario": "encuentra bien el error y lo explica bien",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:20"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-4.md",
+    "nombre": "Test007-4.md",
+    "puntuacion": 4,
+    "comentario": "encuentra bien el error y lo explica bien",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:22"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-4.md",
+    "nombre": "Test007-5.md",
+    "puntuacion": 5,
+    "comentario": "encuentra el error, y da vrias opciones de mejora",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:24"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-6.md",
+    "nombre": "Test007-6.md",
+    "puntuacion": 4,
+    "comentario": "encuentra el error principal y da la solucion correcta",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:27"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-7.md",
+    "nombre": "Test007-7.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:29"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-8.md",
+    "nombre": "Test007-8.md",
+    "puntuacion": 4,
+    "comentario": "encuentra el error pero dice que STATUS_CHECK_URL no esta configurada.. cuando yo veo un error asociado a eso en lo logs",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-09 11:31"
+  }
+]

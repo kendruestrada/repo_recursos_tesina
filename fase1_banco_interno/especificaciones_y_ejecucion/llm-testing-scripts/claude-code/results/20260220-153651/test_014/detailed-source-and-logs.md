@@ -1,0 +1,80 @@
+Tengo suficiente información para hacer el análisis completo. Los logs muestran el patrón clave: cada vez que se procesa una compra, la función `UpdateLoyaltyPointsFunction` se invoca **dos veces** casi simultáneamente (diferencia de ~350ms).
+
+---
+
+## Registro Duplicado de Puntos de Fidelidad: Doble Disparo de EventBridge
+
+### Summary: La función `UpdateLoyaltyPointsFunction` es invocada dos veces por cada evento `PurchaseCompleted` debido a la existencia de dos reglas de EventBridge redundantes definidas en el template SAM.
+
+### Severity: High
+
+---
+
+### Root Cause Analysis
+
+**Pasos para reproducir:**
+1. Se hace un POST a `/purchase` → `ProcessPurchaseFunction` emite evento `PurchaseCompleted` a EventBridge
+2. EventBridge dispara `UpdateLoyaltyPointsFunction` **dos veces** por el mismo evento
+
+**Evidencia en los logs (`/aws/lambda/UpdateLoyaltyPointsFunction`):**
+Cada ventana de 5 minutos muestra dos entradas idénticas separadas por ~350ms:
+```
+2026-02-19 12:20:41.350  Processing points update for user user_test_14: +50
+2026-02-19 12:20:41.738  Processing points update for user user_test_14: +50
+```
+Este patrón se repite sistemáticamente en las 263 invocaciones registradas.
+
+**Resultado real vs. esperado:**
+- Esperado: el usuario acumula +50 puntos por compra
+- Real: el usuario acumula +100 puntos por compra (doble)
+
+**Ubicación del bug: `template.yaml` (reglas duplicadas)**
+
+En `template.yaml` existen **dos reglas de EventBridge** que coinciden con el mismo patrón de evento y apuntan a la misma función:
+
+**Regla 1** — recurso explícito `PurchaseRule` (línea 19):
+```yaml
+PurchaseRule:
+  Type: AWS::Events::Rule
+  Properties:
+    EventPattern:
+      source: ["com.bugwizard.store"]
+      detail-type: ["PurchaseCompleted"]
+    Targets:
+      - Arn: !GetAtt UpdateLoyaltyPointsFunction.Arn
+```
+
+**Regla 2** — evento SAM `PurchaseEvent` en `UpdateLoyaltyPointsFunction` (línea 48):
+```yaml
+Events:
+  PurchaseEvent:
+    Type: EventBridgeRule
+    Properties:
+      Pattern:
+        source: ["com.bugwizard.store"]
+        detail-type: ["PurchaseCompleted"]
+```
+
+SAM genera automáticamente una `AWS::Events::Rule` a partir de `PurchaseEvent`. Al existir también `PurchaseRule` de forma explícita con el mismo patrón, EventBridge invoca la Lambda **dos veces**.
+
+El `ReservedConcurrentExecutions: 1` en `update_points.py` evita la ejecución concurrente, pero las dos invocaciones se ejecutan **secuencialmente**: la segunda lee el total ya escrito por la primera y suma otros +50 puntos, resultando en el doble del valor esperado.
+
+---
+
+### Solution
+
+**Eliminar la regla explícita redundante.** Conservar únicamente el evento SAM `PurchaseEvent` (que es suficiente y más simple de mantener), y eliminar los recursos `PurchaseRule` y `PurchaseRulePermission` del `template.yaml`:
+
+Eliminar de `template.yaml`:
+- El recurso `PurchaseRule` (líneas 19–31)
+- El recurso `PurchaseRulePermission` (líneas 82–88)
+
+El evento SAM `PurchaseEvent` bajo `UpdateLoyaltyPointsFunction` gestiona completamente el disparo desde EventBridge y genera automáticamente los permisos necesarios (equivalente a `PurchaseRulePermission`).
+
+# Total cost USD
+
+0.46618175000000006
+
+# Execution time in seconds: 
+
+98

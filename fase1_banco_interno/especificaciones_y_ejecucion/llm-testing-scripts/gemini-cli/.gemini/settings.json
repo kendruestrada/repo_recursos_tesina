@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "cw-mcp-server": {
+      "trust": true,
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/usuario/Documents/bugwizard/Log-Analyzer-with-MCP/src/cw-mcp-server",
+        "run",
+        "server.py",
+        "--profile",
+        "devAdmin"
+      ]
+    }
+  }
+}

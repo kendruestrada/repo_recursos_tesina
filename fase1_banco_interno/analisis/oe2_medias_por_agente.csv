@@ -1,0 +1,9 @@
+agent,identifico_error,calidad_explicacion,calidad_propuestas,nivel_alucinacion,puntuacion
+bwz_prompt1,0.861,4.25,4.028,4.083,4.083
+bwz_prompt2,0.833,4.139,3.972,3.972,4.111
+claude_basic,0.583,3.306,2.861,3.556,3.25
+claude_detailed,0.919,4.189,4.0,4.378,4.189
+claude_logs,0.886,4.143,3.857,4.343,4.114
+gemini_basic,0.611,3.028,3.0,3.639,3.083
+gemini_detailed,0.861,3.25,3.278,4.306,3.528
+gemini_logs,0.861,3.528,3.361,4.222,3.611

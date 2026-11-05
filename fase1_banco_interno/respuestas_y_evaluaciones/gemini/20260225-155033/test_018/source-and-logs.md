@@ -1,0 +1,51 @@
+## Falla en Saga de Órdenes: Estado completado prematuro y compensación fallida
+### Resumen: Las órdenes fallan al enviarse a la bodega por un error 503, pero quedan erróneamente en estado "completed" y el sistema no logra reembolsar el pago al cliente por límite de peticiones (Error 429).
+### Severidad: Critical
+### Analisis de causa raiz
+- Pasos para reproducir:
+  1. Iniciar la compra de una orden a traves de la funcion trigger_order.
+  2. La funcion charge_payment procesa el cobro exitosamente.
+  3. La funcion update_inventory reduce el stock y marca el estado de la orden como "completed" antes de tiempo.
+  4. La funcion send_to_warehouse falla de manera estatica arrojando una excepcion "503 Service Unavailable", interrumpiendo el flujo.
+  5. La maquina de estados de Step Functions captura el error e inicia la compensacion (revert_inventory y refund_payment).
+  6. La funcion revert_inventory restablece el inventario correctamente.
+  7. La funcion refund_payment falla arrojando un error "429 Too Many Requests", dejando el cobro realizado sin devolver el dinero.
+- Esperado vs. Actual:
+  - Ejemplo de ejecucion esperado: Entrada con {"customer_email": "test@example.com", "amount": 100.0}. Si la API de bodega falla con error 503, la transaccion de 100 USD debe ser reembolsada exitosamente y el estado en base de datos debe ser "failed" o "cancelled". Salida esperada: El cliente no pierde su dinero si no recibe el producto y la orden refleja su estado real de falla.
+  - Actual: Se cobran los 100 USD, falla la comunicacion con la bodega y el estado de la base de datos queda permanentemente como "completed". Adicionalmente, la devolucion de los 100 USD falla y nunca se envia un correo de confirmacion, creando una total inconsistencia de datos y un perjuicio al cliente.
+- Ubicacion del error (file/function):
+  - src/update_inventory.py (funcion handler): Actualizacion prematura del estado de la orden a "completed".
+  - src/send_to_warehouse.py (funcion handler): Falla intencional con codigo de error 503.
+  - src/refund_payment.py (funcion handler): Falla intencional con codigo de error 429, impidiendo la devolucion de fondos.
+- Logs relevantes:
+  - UpdateInventoryFunction: "Order status set to 'completed' (this is the bug!)"
+  - SendToWarehouseFunction: "[ERROR] Exception: Warehouse API Error: 503 Service Unavailable - System under maintenance"
+  - RefundPaymentFunction: "Payment Gateway returned: 429 Too Many Requests"
+  - RefundPaymentFunction: "CRITICAL: Payment was charged but refund FAILED!"
+### Propuesta de Solucion
+1. En el archivo src/update_inventory.py, eliminar la logica que actualiza el estado de la orden a "completed". El estado de la orden en DynamoDB debe permanecer en "pending" o "processing" durante este paso de inventario.
+2. Anadir un paso final en la maquina de estados de AWS Step Functions (statemachine/order_saga.asl.json) que marque el estado de la orden a "completed" unicamente despues de que el estado de send_email finalice sin errores (Success).
+3. Para evitar que los clientes pierdan su dinero por limites de cuota (Rate Limit), implementar una politica de reintentos (Retry) con backoff exponencial en el bloque "CompensateChargePayment" de la maquina de estados. Alternativamente, manejar el reembolso asincronamente con SQS si el gateway de pago presenta inestabilidad persistente.
+4. Anadir un estado final de compensacion de base de datos en Step Functions que se encargue de cambiar el estado de la orden en DynamoDB a "failed" o "cancelled" cuando las compensaciones esten en ejecucion.
+
+# Token Usage
+
+Total Tokens: 93247
+Prompt Tokens: 87434
+Input Tokens (non-cached): 30470
+Response Tokens: 1023
+Cached Tokens: 56964
+Thoughts Tokens: 4790
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.060940
+Cached Cost (USD):  $0.011393
+Output Cost (USD):  $0.012276
+Thoughts Cost (USD):$0.057480
+Total Cost (USD):   $0.142089
+
+
+# Execution time in seconds:
+
+90

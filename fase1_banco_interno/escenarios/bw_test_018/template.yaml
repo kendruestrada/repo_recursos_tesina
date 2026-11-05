@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  bw_test_018: Saga Pattern Compensation Failure
+  
+  A Step Functions workflow that simulates a failed saga with incomplete compensation,
+  leaving the system in an inconsistent state.
+
+Resources:
+
+  # DynamoDB Table for Orders
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: OrdersTable-Test018
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: order_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: order_id
+          KeyType: HASH
+
+  # Lambda: Charge Payment (Step 1)
+  ChargePaymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: ChargePaymentFunction
+      Handler: charge_payment.handler
+      Runtime: python3.9
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+
+  # Lambda: Update Inventory (Step 2)
+  UpdateInventoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: UpdateInventoryFunction
+      Handler: update_inventory.handler
+      Runtime: python3.9
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+
+  # Lambda: Send to Warehouse (Step 3 - FAILS)
+  SendToWarehouseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: SendToWarehouseFunction
+      Handler: send_to_warehouse.handler
+      Runtime: python3.9
+
+  # Lambda: Send Confirmation Email (Step 4)
+  SendConfirmationEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: SendConfirmationEmailFunction
+      Handler: send_email.handler
+      Runtime: python3.9
+
+  # Lambda: Revert Inventory (Compensation for Step 2)
+  RevertInventoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: RevertInventoryFunction
+      Handler: revert_inventory.handler
+      Runtime: python3.9
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+
+  # Lambda: Refund Payment (Compensation for Step 1 - FAILS)
+  RefundPaymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: RefundPaymentFunction
+      Handler: refund_payment.handler
+      Runtime: python3.9
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+
+  # Step Functions State Machine
+  OrderSagaStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/order_saga.asl.json
+      DefinitionSubstitutions:
+        ChargePaymentFunctionArn: !GetAtt ChargePaymentFunction.Arn
+        UpdateInventoryFunctionArn: !GetAtt UpdateInventoryFunction.Arn
+        SendToWarehouseFunctionArn: !GetAtt SendToWarehouseFunction.Arn
+        SendConfirmationEmailFunctionArn: !GetAtt SendConfirmationEmailFunction.Arn
+        RevertInventoryFunctionArn: !GetAtt RevertInventoryFunction.Arn
+        RefundPaymentFunctionArn: !GetAtt RefundPaymentFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ChargePaymentFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref UpdateInventoryFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendToWarehouseFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendConfirmationEmailFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RevertInventoryFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RefundPaymentFunction
+
+  # API Gateway to trigger the saga
+  TriggerOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: TriggerOrderFunction
+      Handler: trigger_order.handler
+      Runtime: python3.9
+      Policies:
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !GetAtt OrderSagaStateMachine.Name
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref OrderSagaStateMachine
+          TABLE_NAME: !Ref OrdersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /order
+            Method: post
+
+  TriggerOrderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TriggerOrderFunction}
+      RetentionInDays: 14
+
+  ChargePaymentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ChargePaymentFunction}
+      RetentionInDays: 14
+
+  UpdateInventoryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UpdateInventoryFunction}
+      RetentionInDays: 14
+
+  SendToWarehouseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SendToWarehouseFunction}
+      RetentionInDays: 14
+
+  SendConfirmationEmailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SendConfirmationEmailFunction}
+      RetentionInDays: 14
+
+  RevertInventoryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RevertInventoryFunction}
+      RetentionInDays: 14
+
+  RefundPaymentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RefundPaymentFunction}
+      RetentionInDays: 14
+
+Outputs:
+  OrdersTableName:
+    Description: "DynamoDB Table Name for Orders"
+    Value: !Ref OrdersTable
+  StateMachineArn:
+    Description: "Step Functions State Machine ARN"
+    Value: !Ref OrderSagaStateMachine
+  TriggerOrderApi:
+    Description: "API Gateway Endpoint URL to trigger orders"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/order"

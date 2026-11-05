@@ -1,0 +1,65 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+YOLO mode is enabled. All tool calls will be automatically approved.
+Attempt 1 failed with status 503. Retrying with backoff... ApiError: {"error":{"message":"{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n","code":503,"status":"Service Unavailable"}}
+    at throwErrorIfNotOK (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/genai/dist/node/index.mjs:11716:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/genai/dist/node/index.mjs:11469:13
+    at async Models.generateContentStream (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/genai/dist/node/index.mjs:12859:24)
+    at async file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/core/loggingContentGenerator.js:143:26
+    at async retryWithBackoff (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/utils/retry.js:128:28)
+    at async GeminiChat.makeApiCallAndProcessStream (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/core/geminiChat.js:445:32)
+    at async GeminiChat.streamWithRetries (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/core/geminiChat.js:265:40)
+    at async Turn.run (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/core/turn.js:67:30)
+    at async GeminiClient.processTurn (file:///usr/local/Cellar/gemini-cli/0.29.7/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/core/client.js:475:26) {
+  status: 503
+}
+Bash command parsing error detected for command: << 'EOF'
+## [Titulo]: Fallo en traspaso de póliza por prima de carga igual a cero
+### Resumen: El traspaso de la póliza 144534 falla debido a que uno de sus dependientes genera una prima de 0 al tener un factor de riesgo nulo, lo que rompe una regla de negocio.
+### Severidad: High
+### Analisis de causa raiz
+- Pasos para reproducir:
+  1. Ejecutar una peticion POST al endpoint de traspaso con el cuerpo `{"policy_id": "144534"}`.
+  2. La funcion Lambda lee la poliza desde DynamoDB, identificando al titular y a un dependiente con `actuarial_age: 0`.
+  3. Al calcular la prima para la carga, se consulta la tabla de factores de riesgo para la edad 0.
+  4. La base de datos devuelve un factor de riesgo de 0 para la edad actuarial 0.
+  5. La funcion `calcular_prima` multiplica la cobertura base (50000) por el factor (0), dando como resultado 0.
+  6. El flujo de ejecucion se interrumpe al llegar a la validacion `if prima_carga == 0:`, la cual levanta una `BusinessRuleException`.
+- Esperado vs. Actual:
+  - Esperado: El calculo de la prima para dependientes (incluso recien nacidos o con edad 0) debe generar un valor valido mayor a cero, o bien la regla de negocio deberia permitir dependientes sin costo adicional.
+  - Actual: El factor de riesgo para la edad 0 es 0, lo que genera una prima de 0 y provoca el rechazo de toda la solicitud de traspaso devolviendo un error 422.
+- Ubicacion del error (file/function): `src/backend/transfer_policy.py` en la funcion `lambda_handler` (donde ocurre la excepcion) y los datos en la tabla DynamoDB de factores de riesgo.
+- Logs relevantes:
+  - `[ERROR] 2026-02-25T18:55:13.642Z 26ed496c-38ef-4c25-8c07-ac2ce600a888 BusinessRuleException: Prima de carga no puede ser cero`
+### Propuesta de Solucion
+Se recomienda revisar la tabla de factores de riesgo en DynamoDB (`test003-risk-factors-dev`) y actualizar el factor para la edad actuarial 0 a un valor superior a 0, garantizando el cobro minimo segun defina el negocio. Alternativamente, si comercialmente un dependiente de edad 0 no tiene costo de prima, se debera modificar el codigo en `src/backend/transfer_policy.py` dentro de `lambda_handler` para eximir de la regla `prima_carga == 0` a este grupo etario especifico, permitiendo asi la continuacion del flujo de traspaso.
+EOF Syntax Errors: [
+  'Error node: "<" at 0:0',
+  'Error node: "`{"policy_id": "144534"}`.\n' +
+    '  2. La funcion Lambda lee la poliza desde DynamoDB, identificando al titular y a un dependiente con `actuarial_age: 0`.\n' +
+    '  3. Al calcular la prima para la carga, se consulta la tabla de factores de riesgo para la edad 0.\n' +
+    '  4. La base de datos devuelve un factor de riesgo de 0 para la edad actuarial 0.\n' +
+    '  5. La funcion `calcular_prima` multiplica la cobertura base (50000) por el factor (0), dando como resultado 0.\n' +
+    '  6. El flujo de ejecucion se interrumpe al llegar a la validacion `if prima_carga == 0:`, la cual levanta una `BusinessRuleException`.\n' +
+    '- Esperado vs. Actual:\n' +
+    '  - Esperado: El calculo de la prima para dependientes (incluso recien nacidos o con edad 0) debe generar un valor valido mayor a cero, o bien la regla de negocio deberia permitir dependientes sin costo adicional.\n' +
+    '  - Actual: El factor de riesgo para la edad 0 es 0, lo que genera una prima de 0 y provoca el rechazo de toda la solicitud de traspaso devolviendo un error 422.\n' +
+    '- Ubicacion del error (file/function): `src/backend/transfer_policy.py` en la funcion `lambda_handler` (donde ocurre la excepcion) y los datos en la tabla DynamoDB de factores de riesgo.\n' +
+    '- Logs relevantes:\n' +
+    '  - `[ERROR] 2026-02-25T18:55:13.642Z 26ed496c-38ef-4c25-8c07-ac2ce600a888 BusinessRuleException: Prima de carga no puede ser cero`\n' +
+    '### Propuesta de Solucion\n' +
+    'Se recomienda revisar la tabla de factores de riesgo en DynamoDB (`test003-risk-factors-dev`) y actualizar el factor para la edad actuarial 0 a un valor superior a 0, garantizando el cobro minimo segun defina el negocio. Alternativamente, si comercialmente un dependiente de edad 0 no tiene costo de prima, se debera modificar el codigo en `src/backend/transfer_policy.py` dentro de `lambda_handler` para eximir de la regla `prima_carga == 0` a este grupo etario especifico, permitiendo asi la continuacion del flujo de traspaso.\n' +
+    'EOF" at 6:70',
+  'Missing node: "" at 10:61',
+  'Missing node: "" at 10:69',
+  'Missing node: "" at 10:83',
+  'Error node: "(0)," at 10:84',
+  'Missing node: "" at 13:54',
+  'Missing node: "" at 13:92',
+  'Missing node: "" at 15:21',
+  'Error node: ":" at 15:37',
+  'Missing node: "" at 15:130',
+  'Missing node: "" at 19:64',
+  'Missing node: "" at 19:93'
+]
+missing pgrep output

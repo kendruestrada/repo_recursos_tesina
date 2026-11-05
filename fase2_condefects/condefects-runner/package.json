@@ -1,0 +1,19 @@
+{
+  "name": "condefects-runner",
+  "private": true,
+  "type": "module",
+  "description": "Runner source-only de BugWizard para el dataset ConDefects",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^25.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

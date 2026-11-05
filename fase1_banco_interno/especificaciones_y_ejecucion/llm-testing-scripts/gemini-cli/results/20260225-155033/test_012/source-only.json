@@ -1,0 +1,41 @@
+{
+  "session_id": "63622a0d-6a95-47a0-b46b-1eda58a3ec10",
+  "response": "## [Condición de Carrera y Caché Obsoleto]: Sobrescritura incorrecta de stock por uso de caché global y falta de atomicidad\n\n### Resumen: La función Lambda retiene estado en una variable global entre ejecuciones y sobrescribe el inventario sin atomicidad, provocando lecturas de datos obsoletos y posibles ventas sin stock real.\n\n### Severidad: Critical\n\n### Analisis de causa raiz\n- Pasos para reproducir\n  1. Ejecutar una petición a la función Lambda para reducir el stock de un SKU. El stock de la base de datos se registra en el diccionario global `internal_cache`.\n  2. Ejecutar inmediatamente peticiones adicionales en el mismo entorno de ejecución (warm start) intentando comprar más unidades del mismo SKU.\n- Esperado vs. Actual\n  - Esperado: Cada transacción debe validarse contra el stock actualizado y la reducción de inventario no debe afectar transacciones concurrentes, rechazando operaciones si no hay fondos o stock suficiente.\n  - Actual: Las llamadas subsecuentes utilizan el valor inmutable guardado en `internal_cache` debido a la persistencia del estado global. Esto ocasiona que la validación inicial del stock sea falsa y se sobrescriba el estado de DynamoDB usando `put_item`, borrando las reducciones hechas por otras peticiones o generando stock negativo.\n- Ubicacion del error (file/function)\n  - Fichero: `inventory_handler/app.py`\n  - Función: `lambda_handler` (almacenamiento en `internal_cache` y escritura insegura con `table.put_item`)\n- Logs relevantes\n  - \"Estado DB antes: [stock_actualizado_pero_ignorado]\"\n  - \"Visto en Cache: [stock_obsoleto_de_ejecucion_previa]\"\n\n### Propuesta de Solucion\n- Eliminar el uso de la variable global `internal_cache` para validaciones críticas de inventario, dado que el estado en memoria de Lambda no es consistente entre invocaciones concurrentes.\n- Modificar el método de acceso a la base de datos: sustituir la lectura previa y el subsecuente `table.put_item` por una única operación transaccional utilizando `table.update_item`.\n- Implementar expresiones de actualización atómica en DynamoDB (`SET stock = stock - :quantity`) en conjunto con bloqueos condicionales (`ConditionExpression=\"stock >= :quantity\"`). Esto asegura que la base de datos misma prevenga actualizaciones cuando el stock real es insuficiente, evitando cualquier condición de carrera o sobreventa.\n- Capturar la excepción generada cuando la condición falla (por ejemplo, `ConditionalCheckFailedException`) para devolver correctamente el código HTTP 400 por falta de stock.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 1,
+          "totalErrors": 0,
+          "totalLatencyMs": 38085
+        },
+        "tokens": {
+          "input": 2763,
+          "prompt": 10819,
+          "candidates": 587,
+          "total": 13525,
+          "cached": 8056,
+          "thoughts": 2119,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 0,
+      "totalSuccess": 0,
+      "totalFail": 0,
+      "totalDurationMs": 0,
+      "totalDecisions": {
+        "accept": 0,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {}
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

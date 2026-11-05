@@ -1,0 +1,46 @@
+## [Titulo]: Fallo en cascada por ThrottlingException en Amazon SES
+### Resumen: El límite de tasa de envíos de correo en Amazon SES ha sido excedido, lo cual abre el circuit breaker en EmailService y provoca errores en cadena hacia OrderProcessing y PaymentConfirmation.
+### Severidad: Critical
+### Analisis de causa raiz
+- Pasos para reproducir
+  1. Ejecutar llamadas concurrentes o continuas a la API que sobrepasen el límite de envíos por segundo configurado en Amazon SES.
+  2. La función EmailService invoca la API de Amazon SES y recibe el error ThrottlingException.
+  3. Tras acumularse fallos consecutivos, el circuit breaker instanciado globalmente en EmailService pasa a estado OPEN.
+  4. Los siguientes intentos de invocación son bloqueados retornando error 503, fallando el flujo completo de forma síncrona.
+- Esperado vs. Actual
+  - Esperado: El pago se confirma y el correo se envía correctamente o se maneja el límite de manera tolerante a fallos, devolviendo al usuario una respuesta 200 OK en la API.
+  - Actual: El error ThrottlingException de Amazon SES no es atrapado de manera que aplique reintentos. El circuit breaker de EmailService detona y retorna de forma sucesiva códigos 504 y 503. OrderProcessing detecta el error síncrono y lo propaga a PaymentConfirmation, cayendo todo el proceso de la orden con errores HTTP.
+- Ubicacion del error (file/function)
+  - Fichero: `lambda/email-service/index.py` (función `send_email_via_ses`)
+  - Fichero: `lambda/order-processing/index.py` (función `lambda_handler`, debido al diseño de integración síncrona RequestResponse y retorno prematuro de errores)
+- Logs relevantes
+  - `EmailService response: {"statusCode": 504, "body": "{\"error\": \"An error occurred (ThrottlingException) when calling the SendEmail operation: Rate exceeded for Amazon SES\"...}`
+  - `EmailService response: {"statusCode": 503, "body": "{\"error\": \"Circuit breaker is OPEN - all requests blocked\"...}`
+  - `OrderProcessing response: {"statusCode": 504, "body": "{\"message\": \"Order processed but email sending failed\"...}`
+### Propuesta de Solucion
+1. Desacoplar el envío de correos utilizando colas de Amazon SQS o Amazon EventBridge entre el servicio OrderProcessing y EmailService. Esto evitaría dependencias síncronas y permitiría absorber los picos de peticiones.
+2. Configurar el cliente Boto3 de Amazon SES para emplear un esquema de reintentos automáticos con "exponential backoff" mediante botocore.config.Config.
+3. Modificar la función OrderProcessing para que finalice exitosamente el flujo de confirmación de pago aun cuando el servicio secundario de correos reporte un fallo por limitación temporal de tasa.
+4. Solicitar a AWS el aumento del límite de envíos (Rate limit) en la cuenta de Amazon SES afectada o la salida del modo Sandbox si aplicara al entorno.
+
+# Token Usage
+
+Total Tokens: 90675
+Prompt Tokens: 85406
+Input Tokens (non-cached): 52926
+Response Tokens: 926
+Cached Tokens: 32480
+Thoughts Tokens: 4343
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.105852
+Cached Cost (USD):  $0.006496
+Output Cost (USD):  $0.011112
+Thoughts Cost (USD):$0.052116
+Total Cost (USD):   $0.175576
+
+
+# Execution time in seconds:
+
+96

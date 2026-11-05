@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test019/Test019-1.md",
+    "nombre": "Test019-1.md",
+    "puntuacion": 3,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-06-09 18:08"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-2.md",
+    "nombre": "Test019-2.md",
+    "puntuacion": 3,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-06-09 18:09"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-3.md",
+    "nombre": "Test019-3.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-06-09 18:09"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-4.md",
+    "nombre": "Test019-4.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-06-09 18:09"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-5.md",
+    "nombre": "Test019-5.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-06-09 18:10"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-6.md",
+    "nombre": "Test019-6.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 2,
+    "fecha": "2026-06-09 18:11"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-7.md",
+    "nombre": "Test019-7.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-06-09 18:11"
+  },
+  {
+    "archivo": "D:/Downloads/Test019/Test019-8.md",
+    "nombre": "Test019-8.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-06-09 18:12"
+  }
+]

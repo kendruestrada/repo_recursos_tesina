@@ -1,0 +1,66 @@
+{
+  "session_id": "674e1027-e923-4bcc-a8ee-cc6afe74ea97",
+  "response": "## [Titulo]: Lentitud en búsqueda de productos por límite de 1MB en DynamoDB provocado por sobre-extracción de datos\n### Resumen: La extracción innecesaria del atributo pesado 'data' fuerza múltiples viajes de red hacia DynamoDB por petición debido al límite de lectura de 1MB, impactando los tiempos de respuesta.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir: Realizar una petición GET al endpoint de búsqueda para una categoría con registros pesados (ej. `/search?category=electronics&limit=20`).\n- Esperado vs. Actual: Se espera que la búsqueda devuelva los productos en pocos milisegundos de forma constante (como sucede con la categoría `books` que demora menos de 50ms). Actualmente, las peticiones para la categoría `electronics` tardan en promedio más de 500ms y registran picos de latencia de hasta 1100ms.\n- Ubicacion del error (file/function): `product_service/app.py` en la función `lambda_handler`, específicamente en la configuración de `query_kwargs` y el bucle iterativo `while True` que ejecuta las consultas.\n- Logs relevantes: En el LogGroup `/aws/lambda/SearchProductsFunction` se aprecian registros `REPORT` con tiempos excesivos, por ejemplo: `REPORT RequestId: df26865d-a517... Duration: 1095.98 ms` o `REPORT RequestId: b9347037-8ea0... Duration: 539.05 ms`.\n\nDynamoDB posee un límite de tamaño de carga útil de 1MB por resultado de consulta. Debido a que el atributo `data` de cada producto en ciertas categorías (`electronics`) es muy pesado, una única llamada a `table.query` no alcanza a devolver los elementos solicitados (`fetch_limit`). Esto fuerza al código a entrar en repetidas iteraciones usando `LastEvaluatedKey` dentro del bucle `while True` para alcanzar el tamaño límite deseado de la página, consumiendo recursos de red, tiempo y memoria en cada iteración. Paradójicamente, el pesado atributo `data` luego es sobrescrito con el valor `(payload hidden)`, por lo que no es necesario para construir la respuesta final de la API.\n\n### Propuesta de Solucion\n1. Agregar el parámetro `ProjectionExpression` a la definición de `query_kwargs` para recuperar estrictamente aquellos atributos necesarios en la respuesta de la API (por ejemplo: `category_id`, `product_id`, `price`, etc.) e instruir explícitamente a DynamoDB que ignore el atributo `data`. De este modo, los ítems se procesarán más rápido y cabrán sin problema en una sola lectura antes de cruzar la barrera de 1MB, eliminando el problema de paginación exhaustiva.\n2. Como hallazgo concurrente al análisis de la función `lambda_handler`, se identificó que el parámetro de entrada `page` está siendo analizado pero jamás es utilizado para afectar la posición de lectura (offset), lo que significa que el listado de cualquier página superior a 1 devolverá erróneamente siempre el mismo bloque de elementos. Se sugiere refactorizar la lógica para recibir y pasar el `ExclusiveStartKey` devuelto al cliente y abandonar la dependencia de un simple número de página.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 10,
+          "totalErrors": 0,
+          "totalLatencyMs": 158910
+        },
+        "tokens": {
+          "input": 121066,
+          "prompt": 664006,
+          "candidates": 1287,
+          "total": 671348,
+          "cached": 542940,
+          "thoughts": 6055,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 9,
+      "totalSuccess": 9,
+      "totalFail": 0,
+      "totalDurationMs": 25116,
+      "totalDecisions": {
+        "accept": 9,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 7,
+          "success": 7,
+          "fail": 0,
+          "durationMs": 24944,
+          "decisions": {
+            "accept": 7,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 2,
+          "success": 2,
+          "fail": 0,
+          "durationMs": 172,
+          "decisions": {
+            "accept": 2,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

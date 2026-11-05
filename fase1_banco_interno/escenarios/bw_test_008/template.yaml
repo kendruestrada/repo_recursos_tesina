@@ -1,0 +1,259 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Banking API with API Gateway endpoints for account management and transfers
+  Includes audit logging and internal transfer processing
+
+Globals:
+  Function:
+    Timeout: 20
+    MemorySize: 128
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+Resources:
+  BankingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: BankingTable
+      AttributeDefinitions:
+        - AttributeName: AccountId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: AccountId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  TransferAuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TransferAuditTable
+      AttributeDefinitions:
+        - AttributeName: TransferId
+          AttributeType: S
+        - AttributeName: Timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: TransferId
+          KeyType: HASH
+        - AttributeName: Timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  BankingApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Name: BankingApi
+
+  GetAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: GetAccountFunction
+      Handler: app.handler
+      Description: Get account details
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref BankingTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BankingTable
+      Events:
+        GetAccount:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BankingApi
+            Path: /account
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - src/get-account/app.ts
+
+  GetAccountLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GetAccountFunction}
+      RetentionInDays: 14
+
+  CreateAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: CreateAccountFunction
+      Handler: app.handler
+      Description: Create a new account
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BankingTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BankingTable
+      Events:
+        CreateAccount:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BankingApi
+            Path: /account
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - src/create-account/app.ts
+
+  CreateAccountLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CreateAccountFunction}
+      RetentionInDays: 14
+
+  DeleteAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: DeleteAccountFunction
+      Handler: app.handler
+      Description: Delete an account
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BankingTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BankingTable
+      Events:
+        DeleteAccount:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BankingApi
+            Path: /account
+            Method: DELETE
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - src/delete-account/app.ts
+
+  DeleteAccountLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DeleteAccountFunction}
+      RetentionInDays: 14
+
+  TransferApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: TransferApiFunction
+      Handler: app.handler
+      Description: Handle transfer requests
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TransferProcessorFunction
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BankingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransferAuditTable
+      Environment:
+        Variables:
+          TRANSFER_PROCESSOR_FUNCTION: !Ref TransferProcessorFunction
+          TABLE_NAME: !Ref BankingTable
+          AUDIT_TABLE_NAME: !Ref TransferAuditTable
+      Events:
+        Transfer:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BankingApi
+            Path: /transfer
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - src/transfer-api/app.ts
+
+  TransferApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TransferApiFunction}
+      RetentionInDays: 14
+
+  TransferProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: TransferProcessorFunction
+      Handler: app.handler
+      Description: Internal function to process individual transfers
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BankingTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TransferAuditTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref BankingTable
+          AUDIT_TABLE_NAME: !Ref TransferAuditTable
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - src/transfer-processor/app.ts
+
+  TransferProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TransferProcessorFunction}
+      RetentionInDays: 14
+
+Outputs:
+  BankingApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${BankingApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  BankingTableName:
+    Description: "DynamoDB Banking Table Name"
+    Value: !Ref BankingTable
+  TransferAuditTableName:
+    Description: "DynamoDB Transfer Audit Table Name"
+    Value: !Ref TransferAuditTable
+  GetAccountFunctionArn:
+    Description: "Get Account Lambda Function ARN"
+    Value: !GetAtt GetAccountFunction.Arn
+  CreateAccountFunctionArn:
+    Description: "Create Account Lambda Function ARN"
+    Value: !GetAtt CreateAccountFunction.Arn
+  DeleteAccountFunctionArn:
+    Description: "Delete Account Lambda Function ARN"
+    Value: !GetAtt DeleteAccountFunction.Arn
+  TransferApiFunctionArn:
+    Description: "Transfer API Lambda Function ARN"
+    Value: !GetAtt TransferApiFunction.Arn
+  TransferProcessorFunctionArn:
+    Description: "Transfer Processor Lambda Function ARN"
+    Value: !GetAtt TransferProcessorFunction.Arn

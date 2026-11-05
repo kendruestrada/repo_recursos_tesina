@@ -1,0 +1,90 @@
+{
+  "session_id": "185960a4-c3d8-4f95-9c95-f57067befe27",
+  "response": "## [Titulo]: Falla de Checkout por Precios Obsoletos debido a Timeout en Invalidación de Caché\n### Resumen: Una llamada síncrona lenta a una API externa causa un timeout en la invalidación del caché, dejando precios antiguos en Redis que luego son rechazados durante el checkout.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Se actualiza el precio de un producto a través de `UpdatePriceFunction`, lo que genera un evento en el Stream de DynamoDB.\n  2. `CacheInvalidationFunction` recibe el lote de eventos (BatchSize configurado en 10) y procesa cada registro de manera secuencial en un ciclo `for`.\n  3. Para cada evento, la función realiza una petición HTTP síncrona a un servicio externo (`requests.get(PROCESSOR_API_URL)`), el cual tarda aproximadamente 15 segundos en responder.\n  4. Dado que el Timeout de la Lambda es de 20 segundos (según el archivo `template.yaml`), la función se agota y falla antes de poder procesar el resto de los registros en el lote o de alcanzar la línea que invalida la llave en Redis (`redis_client.delete(cache_key)`).\n  5. El stream de DynamoDB se bloquea reintentando el lote fallido y el precio obsoleto permanece almacenado en el caché de Redis.\n  6. Un cliente visualiza el producto en la interfaz obteniendo el precio desde la caché mediante `ProductPricingFunction`.\n  7. El cliente intenta finalizar la compra enviando ese precio a `CheckoutFunction`, la cual delega la revisión a `InventoryCheckFunction`.\n  8. `InventoryCheckFunction` lee el precio real directamente de DynamoDB, detecta que la diferencia contra el precio de la UI es mayor al margen permitido y rechaza la compra con el error \"Precio manipulado o desactualizado\".\n- Esperado vs. Actual:\n  - Esperado: Inmediatamente tras la actualización del precio en la base de datos, el caché de Redis se invalida exitosamente. Los usuarios ven el precio real actualizado y el checkout procede sin encontrar inconsistencias entre la UI y la base de datos.\n  - Actual: El timeout constante en el procesamiento de eventos impide la invalidación del caché. Los usuarios siguen viendo precios antiguos y finalizan el flujo de compra enviando un monto que ya no coincide con la base de datos, generando el rechazo total de la operación.\n- Ubicacion del error:\n  - Archivo: `cache_invalidation/app.py`\n  - Función: `lambda_handler` (específicamente la línea `response = requests.get(PROCESSOR_API_URL)` sin manejo de timeouts).\n- Logs relevantes:\n  - En `dev-CacheInvalidationFunction`: Tiempos de ejecución largos (15s) entre `Cambio de precio detectado...` y `Llamada a API externa completada`, seguidos de logs de caída por exceder el tiempo de vida: `REPORT RequestId: ... Duration: 20000.00 ms ... Status: timeout`.\n  - En `dev-InventoryCheckFunction`: Registros que indican `[ERROR] Inconsistencia de precio detectada` con campos como `precioQueMostroCache` y `precioRealEnDB` con valores significativamente distintos.\n  - En `dev-CheckoutFunction`: Registros propagados con `[ERROR] Checkout rechazado por inconsistencia de precio`.\n### Propuesta de Solucion\n1. Agregar un parámetro de tiempo límite en la llamada HTTP externa para evitar que bloquee el hilo principal (ejemplo: `requests.get(PROCESSOR_API_URL, timeout=2)`), capturando el posible `Timeout` en el bloque `except`.\n2. Extraer la invocación a la API externa del flujo crítico de invalidación. Lo ideal es publicar un evento en SQS o EventBridge para que una función separada realice la petición HTTP de manera asíncrona, priorizando siempre limpiar Redis lo más rápido posible.\n3. Procesar los registros del Stream de DynamoDB de forma concurrente en lugar de secuencial (usando hilos o `asyncio`) para mitigar bloqueos en lotes grandes de actualizaciones.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 15,
+          "totalErrors": 0,
+          "totalLatencyMs": 309106
+        },
+        "tokens": {
+          "input": 441128,
+          "prompt": 2740059,
+          "candidates": 2126,
+          "total": 2748964,
+          "cached": 2298931,
+          "thoughts": 6779,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 14,
+      "totalSuccess": 14,
+      "totalFail": 0,
+      "totalDurationMs": 53211,
+      "totalDecisions": {
+        "accept": 14,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 14488,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "search_logs": {
+          "count": 9,
+          "success": 9,
+          "fail": 0,
+          "durationMs": 38643,
+          "decisions": {
+            "accept": 9,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 4,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 76,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

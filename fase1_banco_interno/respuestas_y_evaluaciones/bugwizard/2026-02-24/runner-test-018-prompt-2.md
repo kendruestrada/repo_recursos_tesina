@@ -1,0 +1,219 @@
+## Análisis del Ticket de Soporte
+
+**Ticket:** Los clientes no reciben confirmación por correo electrónico ni los productos son enviados a la bodega después de procesar órdenes de compra a través del endpoint REST.
+
+## Hallazgos en los logs
+
+Al analizar los logs de CloudWatch, se identifican múltiples errores críticos:
+
+1. **Error recurrente en SendToWarehouse:**
+   ```
+   ❌ Warehouse API returned: 503 Service Unavailable
+   ❌ Warehouse is under maintenance
+   [ERROR] Exception: Warehouse API Error: 503 Service Unavailable - System under maintenance
+   ```
+
+2. **Patrón de reintentos fallidos:** El sistema está ejecutando múltiples intentos de envío a la bodega, todos fallando con el mismo error 503.
+
+3. **Ausencia de logs de compensación:** No se observan logs de las funciones de compensación (RefundPayment, RevertInventory) ejecutándose correctamente.
+
+## Relación con el código fuente
+
+### 1. **Falla principal en `send_to_warehouse.py`:**
+```python
+def handler(event, context):
+    order_id = event['order_id']
+    
+    print(f"🏭 [SendToWarehouse] Attempting to send order {order_id} to warehouse...")
+    print(f"🏭 Calling Warehouse API...")
+    
+    # PROBLEMA: Siempre falla - hardcodeado para fallar
+    print(f"❌ Warehouse API returned: 503 Service Unavailable")
+    print(f"❌ Warehouse is under maintenance")
+    
+    raise Exception("Warehouse API Error: 503 Service Unavailable - System under maintenance")
+```
+
+### 2. **Bug crítico en `update_inventory.py`:**
+```python
+table.update_item(
+    Key={'order_id': order_id},
+    UpdateExpression='SET #status = :status, inventory_updated = :updated',
+    ExpressionAttributeNames={
+        '#status': 'status'
+    },
+    ExpressionAttributeValues={
+        ':status': 'completed',  # BUG: Marca como completado prematuramente
+        ':updated': True
+    }
+)
+
+print(f"⚠️  Order status set to 'completed' (this is the bug!)")
+```
+
+### 3. **Falla en compensación en `refund_payment.py`:**
+```python
+def handler(event, context):
+    # ...
+    print(f"❌ Payment Gateway returned: 429 Too Many Requests")
+    print(f"❌ Rate limit exceeded - cannot process refund")
+    print(f"⚠️  CRITICAL: Payment was charged but refund FAILED!")
+    
+    # PROBLEMA: Siempre falla la compensación
+    raise Exception("Payment Gateway Error: 429 Too Many Requests - Rate limit exceeded")
+```
+
+### 4. **Configuración del Step Functions con reintentos:**
+```json
+"SendToWarehouse": {
+  "Type": "Task",
+  "Resource": "${SendToWarehouseFunctionArn}",
+  "ResultPath": "$.warehouseResult",
+  "Retry": [
+    {
+      "ErrorEquals": ["States.ALL"],
+      "MaxAttempts": 3,
+      "BackoffRate": 1.5
+    }
+  ],
+  "Catch": [
+    {
+      "ErrorEquals": ["States.ALL"],
+      "ResultPath": "$.error",
+      "Next": "CompensateInventory"
+    }
+  ],
+  "Next": "SendConfirmationEmail"
+}
+```
+
+## Ejemplo de ejecución
+
+**Flujo actual (fallido):**
+1. **ChargePayment** ✅ - Ejecuta correctamente, cobra $100, genera payment_id
+2. **UpdateInventory** ⚠️ - Ejecuta pero marca incorrectamente el status como "completed"
+3. **SendToWarehouse** ❌ - Falla siempre con 503, activa reintentos (3 intentos)
+4. **CompensateInventory** ✅ - Se ejecuta correctamente, revierte inventory_updated=false
+5. **RefundPayment** ❌ - Falla siempre con 429, no puede revertir el pago
+6. **SagaFailed** - El workflow termina en estado fallido
+
+**Estado final inconsistente:**
+- ✅ Pago procesado (no revertido)
+- ❌ Inventario revertido
+- ❌ Producto no enviado a bodega
+- ❌ Email no enviado
+- ⚠️ Status en DB = "completed" (incorrecto)
+
+## Soluciones propuestas
+
+### Solución 1: Corrección inmediata de bugs críticos
+
+**A. Corregir `update_inventory.py`:**
+```python
+table.update_item(
+    Key={'order_id': order_id},
+    UpdateExpression='SET inventory_updated = :updated',  # Remover status update
+    ExpressionAttributeValues={
+        ':updated': True
+    }
+)
+# El status debe actualizarse solo al final del workflow exitoso
+```
+
+**B. Implementar lógica real en `send_to_warehouse.py`:**
+```python
+import requests
+import os
+
+def handler(event, context):
+    order_id = event['order_id']
+    warehouse_api_url = os.environ.get('WAREHOUSE_API_URL', 'https://warehouse-api.example.com')
+    
+    try:
+        response = requests.post(f"{warehouse_api_url}/orders", 
+                               json={'order_id': order_id}, 
+                               timeout=30)
+        
+        if response.status_code == 200:
+            print(f"✅ Order {order_id} sent to warehouse successfully")
+            return {'status': 'success', 'warehouse_confirmed': True}
+        else:
+            raise Exception(f"Warehouse API Error: {response.status_code}")
+            
+    except Exception as e:
+        print(f"❌ Failed to send to warehouse: {str(e)}")
+        raise
+```
+
+**C. Implementar lógica real en `refund_payment.py`:**
+```python
+def handler(event, context):
+    order_id = event['order_id']
+    payment_id = event.get('paymentResult', {}).get('payment_id')
+    
+    try:
+        # Implementar llamada real al gateway de pagos
+        # payment_gateway.refund(payment_id)
+        
+        table = dynamodb.Table(TABLE_NAME)
+        table.update_item(
+            Key={'order_id': order_id},
+            UpdateExpression='SET payment_status = :status',
+            ExpressionAttributeValues={':status': 'refunded'}
+        )
+        
+        return {'status': 'success', 'refunded': True}
+        
+    except Exception as e:
+        print(f"❌ Refund failed: {str(e)}")
+        raise
+```
+
+### Solución 2: Mejorar el manejo de estados
+
+**Agregar función para actualizar status final:**
+```python
+# src/update_order_status.py
+def handler(event, context):
+    order_id = event['order_id']
+    status = event['status']  # 'completed' o 'failed'
+    
+    table = dynamodb.Table(TABLE_NAME)
+    table.update_item(
+        Key={'order_id': order_id},
+        UpdateExpression='SET #status = :status, updated_at = :timestamp',
+        ExpressionAttributeNames={'#status': 'status'},
+        ExpressionAttributeValues={
+            ':status': status,
+            ':timestamp': int(time.time())
+        }
+    )
+```
+
+**Actualizar Step Functions para incluir actualización de status:**
+```json
+"SendConfirmationEmail": {
+  "Type": "Task",
+  "Resource": "${SendConfirmationEmailFunctionArn}",
+  "ResultPath": "$.emailResult",
+  "Next": "UpdateOrderStatusCompleted"
+},
+"UpdateOrderStatusCompleted": {
+  "Type": "Task",
+  "Resource": "${UpdateOrderStatusFunctionArn}",
+  "Parameters": {
+    "order_id.$": "$.order_id",
+    "status": "completed"
+  },
+  "Next": "SagaSucceeded"
+}
+```
+
+### Solución 3: Implementar monitoreo y alertas
+
+**Agregar métricas personalizadas y alarmas CloudWatch para:**
+- Tasa de fallos en SendToWarehouse
+- Fallos de compensación en RefundPayment
+- Órdenes en estado inconsistente
+
+La causa raíz es una combinación de código hardcodeado para fallar (simulación de errores) y un bug que marca órdenes como completadas prematuramente, resultando en un sistema en estado inconsistente donde los pagos se procesan pero las compensaciones fallan.

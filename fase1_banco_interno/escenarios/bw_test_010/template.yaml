@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: aws-sam-user-registration
+
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+
+Resources:
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Users
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  EmailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${EmailServiceFunction}"
+      RetentionInDays: 14
+
+  UserRegistrationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${UserRegistrationFunction}"
+      RetentionInDays: 14
+
+  SearchUsersLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${SearchUsersFunction}"
+      RetentionInDays: 14
+
+  UserApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - "*"
+        AllowOrigins:
+          - "*"
+
+  UserRegistrationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: UserRegistrationFunction
+      Handler: src/handlers/register.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        RegisterUser:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UserApi
+            Path: /users
+            Method: post
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+          - src/handlers/register.ts
+
+  EmailServiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: SendEmailServiceFunction
+      Handler: src/handlers/email.handler
+      Policies:
+        - SESCrudPolicy:
+            IdentityName: "*" # Ideally restriction to specific verified identity
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt UsersTable.StreamArn
+            BatchSize: 1
+            StartingPosition: LATEST
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"eventName": ["INSERT", "MODIFY"]}'
+      Environment:
+        Variables:
+          SOURCE_EMAIL: '{{resolve:ssm:/bw-010/email/source}}'
+          EMAIL_CHARSET: '{{resolve:ssm:/bw-010/email/charset}}'
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+          - src/handlers/email.ts
+
+  SearchUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      FunctionName: SearchUsersFunction
+      Handler: src/handlers/search.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        SearchUsers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UserApi
+            Path: /users/search
+            Method: get
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints: 
+          - src/handlers/search.ts
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub "arn:aws:s3:::${FrontendBucket}/*"
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${UserApi}.execute-api.${AWS::Region}.amazonaws.com/"
+
+  FrontendURL:
+    Description: "URL for the static website"
+    Value: !GetAtt FrontendBucket.WebsiteURL
+
+  FrontendBucket:
+    Description: "S3 Bucket Name for Frontend"
+    Value: !Ref FrontendBucket

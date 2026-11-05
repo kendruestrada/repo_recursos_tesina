@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Timeout: 5
+    MemorySize: 128
+    Runtime: nodejs18.x
+Resources:
+  UserProfileTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: user-profiles-prod
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  UserProfileApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Session-Action'"
+        AllowOrigin: "'*'" 
+  UserProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: UserProfileFunction
+      Handler: handlers/profile_service.handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref UserProfileTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfileTable
+      Events:
+        GetProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UserProfileApi
+            Path: /user/profile
+            Method: get
+
+  UserProfileLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UserProfileFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub "https://${UserProfileApi}.execute-api.${AWS::Region}.amazonaws.com/prod/user/profile"

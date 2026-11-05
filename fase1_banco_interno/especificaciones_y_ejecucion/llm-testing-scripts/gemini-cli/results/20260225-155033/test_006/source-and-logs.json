@@ -1,0 +1,66 @@
+{
+  "session_id": "6aabb028-3094-4306-9b89-5c53d6618178",
+  "response": "## Timeout en DynamoDB Stream bloquea invalidación de caché\n### Resumen: La función Lambda encargada de invalidar la caché no logra procesar todos los registros de un lote debido a llamadas HTTP síncronas muy lentas y sin límite de tiempo, causando un bloqueo infinito en el stream y dejando precios desactualizados en Redis.\n### Severidad: Critical\n### Analisis de causa raiz\n- Pasos para reproducir:\n1. Se actualizan los precios de uno o más productos a través de la API de actualización.\n2. DynamoDB Stream agrupa las modificaciones en un lote (batch) y lo envía a la función `CacheInvalidationFunction`.\n3. La función itera sobre cada registro del lote de manera secuencial.\n4. Para cada iteración, se realiza una petición bloqueante mediante `requests.get(PROCESSOR_API_URL)` sin parámetro de timeout. Esta petición tarda aproximadamente 15 segundos en completarse.\n5. Al intentar procesar un segundo registro dentro del mismo lote, el tiempo total de ejecución supera el límite configurado de la función Lambda (20 segundos), provocando que esta termine forzosamente por un Timeout.\n6. Como la función falla, DynamoDB reintenta el mismo lote indefinidamente (comportamiento conocido como \"Poison Pill\"), bloqueando el flujo. \n7. En consecuencia, la clave en Redis no se elimina y el componente `ProductPricingFunction` continúa retornando el precio antiguo a los clientes, desencadenando posteriormente un error de \"Precio manipulado o desactualizado\" en el flujo de `CheckoutFunction`.\n\n- Esperado vs. Actual:\nEsperado: Que la función de invalidación procese todos los eventos del lote en el tiempo provisto (20s), elimine la caché correctamente para cada producto, y que DynamoDB avance hacia los siguientes registros del stream.\nActual: La petición HTTP agota el tiempo de ejecución, el lote completo se marca como fallido, y entra en un ciclo de reintentos infinitos. Las cachés nunca llegan a invalidarse, generando inconsistencias de precios durante el checkout.\n\n- Ubicacion del error (file/function):\nFile: `@cache_invalidation/app.py`\nFunction: `lambda_handler` (línea donde se encuentra `requests.get(PROCESSOR_API_URL)`)\n\n- Logs relevantes:\n```json\n{\"level\":\"INFO\", \"message\":\"Cambio de precio detectado en DynamoDB Stream\", \"productId\":\"PROD-985\", \"timestamp\":\"2026-02-25 16:11:15,296+0000\"}\n{\"level\":\"INFO\", \"message\":\"Llamada a API externa completada\", \"statusCode\":200, \"timestamp\":\"2026-02-25 16:11:30,417+0000\"}\n{\"level\":\"INFO\", \"message\":\"Cambio de precio detectado en DynamoDB Stream\", \"productId\":\"PROD-406\", \"timestamp\":\"2026-02-25 16:11:30,424+0000\"}\nREPORT RequestId: bf9a4782-2d52-4e92-89e3-e1a4705ec7e7 Duration: 20000.00 ms Billed Duration: 20000 ms Memory Size: 256 MB Max Memory Used: 79 MB Status: timeout\n```\n*(Los logs de dev-InventoryCheckFunction evidencian luego el síntoma secundario: \"Inconsistencia de precio detectada\")*\n\n### Propuesta de Solucion\n1. Agregar el parámetro `timeout` a la petición HTTP para evitar que bloquee la ejecución. Por ejemplo: `requests.get(PROCESSOR_API_URL, timeout=2)`.\n2. Reordenar el flujo de ejecución para eliminar la caché en Redis (`redis_client.delete(cache_key)`) antes de intentar consumir la API externa, asegurando así que el sistema principal siempre quede consistente en caso de fallo externo.\n3. Desacoplar la llamada a la API externa utilizando AWS SQS o EventBridge, permitiendo que la invalidación de caché en Redis ocurra de inmediato de forma independiente.\n4. Configurar manejo de fallos en el DynamoDB Stream dentro de `template.yaml` limitando los reintentos mediante `MaximumRetryAttempts` o enviando los registros fallidos a una cola DLQ (Dead Letter Queue) a través de `DestinationConfig`, evitando el bloqueo por \"poison pill\".",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 5,
+          "totalErrors": 0,
+          "totalLatencyMs": 92627
+        },
+        "tokens": {
+          "input": 120009,
+          "prompt": 397898,
+          "candidates": 1294,
+          "total": 403718,
+          "cached": 277889,
+          "thoughts": 4526,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 4,
+      "totalSuccess": 4,
+      "totalFail": 0,
+      "totalDurationMs": 13901,
+      "totalDecisions": {
+        "accept": 4,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 13897,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 4,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

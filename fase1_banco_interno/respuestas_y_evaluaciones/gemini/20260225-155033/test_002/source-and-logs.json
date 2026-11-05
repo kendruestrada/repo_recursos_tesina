@@ -1,0 +1,54 @@
+{
+  "session_id": "0821c41a-ca39-4c8c-8f13-0f1a190ae869",
+  "response": "## [Titulo]: Falta de validación del código de estado HTTP en la respuesta del proveedor externo de pagos\n### Resumen: El sistema marca todos los pagos como exitosos y los guarda en base de datos sin verificar si la llamada a la API externa de pagos fue realmente aprobada o rechazada.\n### Severidad: Critical\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. El webhook recibe el evento y extrae el `transaction_id`.\n  2. La función ejecuta un `fetch` (GET) al `externalPaymentServiceUrl` para consultar la transacción.\n  3. El proveedor externo rechaza el pago (por ejemplo, fondos insuficientes) o no encuentra la operación, respondiendo con un código de error HTTP (ej. 400 Bad Request, 402 Payment Required o 404 Not Found).\n  4. La función ignora totalmente si la llamada a `fetch` fue exitosa (no evalúa `response.ok` ni el cuerpo de la respuesta).\n  5. El sistema procede a ejecutar `docClient.send(new PutCommand(...))` asignando de forma estática y forzosa `payment_status: \"success\"` y `order_status: \"paid\"`.\n  6. Posteriormente la función llama a la URL de confirmación, revelando el error de forma pasiva.\n- Esperado vs. Actual:\n  - **Esperado**: Tras la invocación a la pasarela de pagos, el código debe comprobar que la respuesta HTTP exponga un éxito (ej. `response.ok === true`). En caso de fallo, debe registrar la transacción de forma consecuente (estado fallido o retenido) y no confirmar un pago irreal.\n  - **Actual**: El sistema sobreescribe el estado transaccional local afirmando que se recibió un pago, creando una inconsistencia crítica de negocio donde el sistema cree que la orden está pagada, pero el proveedor externo no efectuó débito alguno.\n- Ubicacion del error (file/function): `src/internal_services/SavePayment.js` (en la función `exports.handler`)\n- Logs relevantes:\n  - Tras guardar forzosamente el registro en base de datos (`INFO LOCAL_PAYMENT_PERSISTED`), el registro de logs de CloudWatch muestra sistemáticamente confirmaciones fallidas provenientes del proveedor: `INFO CONFIRMATION_RESPONSE { status: 404, statusText: 'Not Found' }`.\n  - Existen trazas intermitentes por `TypeError: fetch failed` o `SocketError` (18:20:26.134Z). Estos cortan la ejecución de raíz. El problema real está en los errores semánticos u operativos devueltos con códigos HTTP válidos (4xx/5xx) los cuales la aplicación enruta al camino del éxito sin revisión previa.\n- Ejemplo de ejecución para depuración:\n  - **Entrada**: Recibe `transaction_id = TRX_CANARY_8eafd2`.\n  - **Consulta Externa**: `fetch` retorna una respuesta HTTP 404 Not Found de la pasarela de pago.\n  - **Inconsistencia Lógica**: Al no existir ninguna declaración condicional (ej. `if (!response.ok)`), la lambda asume pago consolidado, guarda `\"success\"` en base de datos e invoca el endpoint POST de confirmación.\n  - **Confirmación final**: El servidor externo rechaza confirmar lo inexistente y devuelve `{ status: 404, statusText: 'Not Found' }`.\n### Propuesta de Solucion\n1. **Validar la Respuesta HTTP**: Inmediatamente después del bloque de `fetch` inicial, evaluar si `response.ok` es verdadero. \n2. **Inspección de Contrato de Pago**: Extraer y decodificar el cuerpo de la respuesta del proveedor (`await response.json()`) para corroborar el estado real aprobado en el servicio externo.\n3. **Manejo Dinámico de Estados**: Alimentar la inserción a DynamoDB dinámicamente con el estado obtenido, reemplazando el `\"success\"` hardcodeado por la variable que represente fielmente la respuesta del banco/proveedor (`\"success\"`, `\"failed\"`, o `\"pending\"`).\n4. **Cortocircuito**: Si el proveedor de pagos informa un rechazo definitivo, abortar el flujo normal y retornar la alerta pertinente al sistema y a los logs, evitando invocar innecesariamente el webhook de confirmación final.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 145950
+        },
+        "tokens": {
+          "input": 48643,
+          "prompt": 64862,
+          "candidates": 1025,
+          "total": 69354,
+          "cached": 16219,
+          "thoughts": 3467,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 3571,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3571,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

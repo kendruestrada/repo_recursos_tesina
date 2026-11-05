@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test007/Test007-1.md",
+    "nombre": "Test008-1.md",
+    "puntuacion": 4,
+    "comentario": "encuentra el error y lo explica",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-2.md",
+    "nombre": "Test008-2.md",
+    "puntuacion": 4,
+    "comentario": "explica un error no relacionado.",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 2,
+    "fecha": "2026-03-09 11:49"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-3.md",
+    "nombre": "Test008-3.md",
+    "puntuacion": 5,
+    "comentario": "encuentra el error sin embargo la socucion propuesta no es la que se esperaba (no estoy seguro si es la mejor)",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:51"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-4.md",
+    "nombre": "Test008-4.md",
+    "puntuacion": 4,
+    "comentario": "explica el error pero la explicacion es muy corta no se entiende bien.",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 11:52"
+  },
+  {
+    "archivo": "D:/Downloads/Test007/Test007-5.md",
+    "nombre": "Test008-5.md",
+    "puntuacion": 4,
+    "comentario": "encuentra otros problemas no estoy seguro si existen o no",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-09 11:55"
+  },
+  {
+    "archivo": "D:/Downloads/Test008/Test008-6.md",
+    "nombre": "Test008-6.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:01"
+  },
+  {
+    "archivo": "D:/Downloads/Test008/Test008-7.md",
+    "nombre": "Test008-7.md",
+    "puntuacion": 5,
+    "comentario": "todo bien, pero habla de un error de permisos no relacionado",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-09 12:03"
+  },
+  {
+    "archivo": "D:/Downloads/Test008/Test008-8.md",
+    "nombre": "Test008-8.md",
+    "puntuacion": 5,
+    "comentario": "todo bien.",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-09 12:03"
+  }
+]

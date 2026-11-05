@@ -1,0 +1,46 @@
+Síntoma Reportado:
+"El cliente recibió 5 emails de confirmación de compra idénticos para la misma orden"
+
+Flujo del Error:
+1. Lambda ProcessOrder procesa una orden exitosamente
+2. Al final, publica mensaje a SQS queue "SendConfirmationEmail"
+3. Lambda EmailSender consume mensaje de SQS
+4. Lambda EmailSender llama a SES para enviar email
+5. SES envía email exitosamente (HTTP 200)
+6. Lambda EmailSender intenta eliminar mensaje de SQS
+7. Eliminación falla por timeout de red transitorio (503 Service Unavailable)
+8. Lambda retorna error, mensaje NO se elimina de SQS
+9. Mensaje se vuelve visible en la queue después de visibility timeout (30 segundos)
+10. Lambda EmailSender consume el MISMO mensaje nuevamente
+11. Como no hay verificación de idempotencia (no chequea si email ya fue enviado), envía email duplicado
+12. Proceso se repite 5 veces hasta que finalmente la eliminación de SQS funciona
+13. Cliente recibe 5 emails idénticos
+
+Causa Raíz:
+- Lambda EmailSender no implementa idempotencia (no guarda registro de emails enviados)
+- No hay deduplication_id en los mensajes SQS (SQS standard, no FIFO)
+- Timeout de red en DeleteMessage no se maneja con retry exponencial
+- No hay verificación de "email ya enviado" antes de llamar a SES
+- El error de DeleteMessage es silencioso, no genera alarma
+
+Desafío para MCP:
+- Debe buscar logs de EmailSender (múltiples invocaciones con mismo message_id)
+- Debe buscar logs de SES (múltiples emails enviados para misma orden)
+- Debe correlacionar que las invocaciones procesaron el mismo mensaje SQS
+- Debe buscar métricas de SQS (NumberOfMessagesReceived vs NumberOfMessagesDeleted)
+- Debe identificar el error de DeleteMessage en los logs
+- Debe entender que la falta de idempotencia es el problema arquitectural
+
+Desafío sin-MCP:
+- ¿Cómo saber que es un problema de SQS si el síntoma es "emails duplicados"?
+- Necesitaría logs de múltiples invocaciones + message_id de SQS
+- Sin entender el flujo de SQS visibility timeout, imposible diagnosticar
+- El error de DeleteMessage puede estar en cualquier invocación
+
+Preguntas:
+2.- El cliente recibió 5 emails de confirmación de compra idénticos para la misma orden
+3.- El cliente recibió 5 emails de confirmación de compra idénticos para la misma orden
+- Cliente confirma y termina el flujo de compra.
+- El sistema recibe la orden de enviar el correo de compra.
+- El sistema debe enviar un solo correo, evitando duplicidades, independiente de la cantidad y causas de reintentos.
+Resultado: El cliente recibe un solo correo, tal como se espera.

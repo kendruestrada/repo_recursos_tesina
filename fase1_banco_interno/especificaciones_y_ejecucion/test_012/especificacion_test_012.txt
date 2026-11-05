@@ -1,0 +1,54 @@
+Síntoma Reportado:
+"El inventario del producto SKU-7821 muestra -3 unidades disponibles (stock negativo)"
+
+Flujo del Error:
+1. Producto SKU-7821 tiene stock inicial de 5 unidades en DynamoDB
+2. Dos usuarios (User A y User B) intentan comprar 3 unidades simultáneamente
+3. Lambda InventoryCheck (User A):
+   - Lee stock actual: 5 unidades (timestamp T0)
+   - Valida: 5 >= 3 ✅
+   - Calcula nuevo stock: 5 - 3 = 2
+4. Lambda InventoryCheck (User B):
+   - Lee stock actual: 5 unidades (timestamp T0 + 50ms, antes del write de A)
+   - Valida: 5 >= 3 ✅
+   - Calcula nuevo stock: 5 - 3 = 2
+5. Lambda InventoryCheck (User A):
+   - Escribe nuevo stock: 2 unidades (timestamp T1)
+6. Lambda InventoryCheck (User B):
+   - Escribe nuevo stock: 2 unidades (timestamp T1 + 100ms)
+   - SOBRESCRIBE el valor de A sin saberlo
+7. Estado final en DynamoDB: stock = 2 unidades
+8. Estado esperado: stock = 5 - 3 - 3 = -1 (debió rechazar una compra)
+9. Tercer usuario (User C) compra 5 unidades (stock muestra 2, pero valida contra cache stale de 5)
+10. Ahora stock = 2 - 5 = -3 unidades
+
+Causa Raíz:
+- No se usa conditional update con version number o timestamp
+- Dos transacciones concurrentes hacen read-modify-write sin lock
+- DynamoDB UpdateItem no tiene ConditionExpression
+- Lost update problem clásico de concurrencia
+- Validación de stock insuficiente (no re-valida antes de write)
+- Tercer problema agregado: caché no sincronizado
+
+Desafío para MCP:
+- Debe buscar logs de múltiples invocaciones de InventoryCheck al mismo tiempo
+- Debe correlacionar timestamps de lecturas y escrituras
+- Debe buscar valores de stock en cada operación (ver que ambos leyeron 5)
+- Debe buscar métricas de DynamoDB (ConditionalCheckFailedRequests = 0, indicando que no hay concurrency control)
+- Debe identificar el patrón de lost update
+- Debe entender que el problema solo ocurre con concurrencia alta
+
+Desafío sin-MCP:
+- El síntoma es "stock negativo" pero no indica concurrencia
+- ¿Qué logs pasar? Necesitaría logs de TODAS las transacciones cercanas en el tiempo
+- Sin correlación temporal, parece un bug de cálculo simple
+- Difícil reproducir sin carga concurrente
+
+Preguntas:
+2.- El inventario del producto SKU-7821 muestra -3 unidades disponibles (stock negativo)
+3.- El inventario del producto SKU-7821 muestra -3 unidades disponibles (stock negativo)
+- El usuario elige un producto.
+- El sistema anota qué versión del stock está viendo el usuario.
+- Al hacer clic en comprar, el sistema verifica: "¿Sigue habiendo la misma cantidad que cuando este usuario empezó?".
+- Si alguien más ya compró reduciendo el stock, el sistema detiene la transacción y avisa la nueva cantidad o que ya no hay stock.
+Resultado: El inventario se mantiene exacto y se informa la cantidad en “vivo” del stock para cada transacción, evitando ejecutar movimientos que lleven stock a negativo.

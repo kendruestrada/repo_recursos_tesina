@@ -1,0 +1,54 @@
+{
+  "session_id": "ea1ab2fa-9b21-4f0f-a49c-c6391597d988",
+  "response": "## Agotamiento del pool de conexiones causante de tiempos de espera (Timeout)\n### Resumen: Las conexiones no se liberan de vuelta al pool tras ejecuciones exitosas, lo que agota el semáforo y bloquea peticiones subsecuentes causando un timeout.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir: Enviar peticiones válidas consecutivas al endpoint expuesto. Las primeras 5 peticiones (definidas por `maxconn=5`) se procesarán de manera casi instantánea, pero la 6ta petición se quedará bloqueada en un bucle de espera, lo que terminará provocando un error por timeout tras cumplirse el límite de tiempo.\n- Esperado vs. Actual: Se espera que, tras obtener una conexión (`connection_pool.getconn()`), esta se devuelva siempre al pool usando `connection_pool.putconn(conn)`. Actualmente, esta liberación ocurre únicamente si la ejecución falla entrando al bloque `except`. En una ejecución exitosa, la conexión no se devuelve, perdiendo un cupo del semáforo hasta llegar a 0 e impidiendo resolver llamadas posteriores.\n- Ubicacion del error: `app/app.py` / función `lambda_handler`\n- Logs relevantes:\n  `REPORT RequestId: 74715b57-65ea-4e86-a73a-2ca31e4b7e65 Duration: 30000.00 ms Billed Duration: 30000 ms Memory Size: 256 MB Max Memory Used: 40 MB Status: timeout`\n### Propuesta de Solucion\nSe recomienda incluir un bloque `finally` que contenga la función `connection_pool.putconn(conn)`. Al agrupar esta instrucción dentro de la estructura `try-except-finally`, se garantiza que la conexión a la base de datos siempre sea liberada y puesta a disposición en el pool para la siguiente invocación, tanto en resoluciones exitosas como en casos de fallos en la función `lambda_handler`.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 41317
+        },
+        "tokens": {
+          "input": 32409,
+          "prompt": 48617,
+          "candidates": 506,
+          "total": 51485,
+          "cached": 16208,
+          "thoughts": 2362,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 3502,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3502,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

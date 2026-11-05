@@ -1,0 +1,36 @@
+Síntoma Reportado:
+"Usuarios con nombres con tildes (José, María) aparecen como 'Jos', 'Mar' en sus perfiles"
+
+Flujo del Error:
+1. Lambda UserRegistration recibe datos del formulario (UTF-8)
+2. Guarda en DynamoDB correctamente: "José"
+3. Lambda EmailService lee de DynamoDB y genera email
+4. Al construir el HTML del email, usa una plantilla con encoding Latin-1
+5. El carácter 'é' no existe en Latin-1, se trunca
+6. Email se envía con "Jos" en lugar de "José"
+7. Usuario ve su nombre incorrecto en el email de bienvenida
+8. Pero en DynamoDB y en la UI web está correcto
+
+Causa Raíz:
+- Template de email configurado con charset=latin-1 en vez de UTF-8
+- Python string encode('latin-1', errors='ignore') trunca silenciosamente
+- No hay validación de encoding en el pipeline
+- Error solo afecta caracteres especiales (tildes, ñ, etc.)
+
+Desafío para MCP:
+- Debe comparar datos en DynamoDB vs. logs de EmailService
+- Debe identificar el problema de encoding (no hay error, solo data loss)
+- Debe buscar configuración de templates
+- Es un problema de OUTPUT, no de almacenamiento
+
+Desafío sin-MCP:
+- El síntoma es sutil, ¿qué logs buscar si técnicamente no hay error?
+
+Preguntas:
+2.- Usuarios con nombres con tildes (José, María) aparecen como 'Jos', 'Mar' en sus perfiles
+3.- Usuarios con nombres con tildes (José, María) aparecen como 'Jos', 'Mar' en sus perfiles
+- El usuario se registra con su nombre completo, incluyendo todos sus caracteres y tildes.
+- Los datos se guardan de forma segura.   
+- El sistema de correos se configura para reconocer cualquier alfabeto o símbolo especial.   
+- El mensaje se genera manteniendo la integridad del texto original.
+Resultado: El usuario recibe su bienvenida con su nombre correctamente escrito.

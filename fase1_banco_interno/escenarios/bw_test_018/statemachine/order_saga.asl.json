@@ -1,0 +1,85 @@
+{
+  "Comment": "Order Saga with Compensation - Test 018",
+  "StartAt": "ChargePayment",
+  "States": {
+    "ChargePayment": {
+      "Type": "Task",
+      "Resource": "${ChargePaymentFunctionArn}",
+      "ResultPath": "$.paymentResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SagaFailed"
+        }
+      ],
+      "Next": "UpdateInventory"
+    },
+    "UpdateInventory": {
+      "Type": "Task",
+      "Resource": "${UpdateInventoryFunctionArn}",
+      "ResultPath": "$.inventoryResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CompensateChargePayment"
+        }
+      ],
+      "Next": "SendToWarehouse"
+    },
+    "SendToWarehouse": {
+      "Type": "Task",
+      "Resource": "${SendToWarehouseFunctionArn}",
+      "ResultPath": "$.warehouseResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "MaxAttempts": 3,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CompensateInventory"
+        }
+      ],
+      "Next": "SendConfirmationEmail"
+    },
+    "SendConfirmationEmail": {
+      "Type": "Task",
+      "Resource": "${SendConfirmationEmailFunctionArn}",
+      "ResultPath": "$.emailResult",
+      "Next": "SagaSucceeded"
+    },
+    "CompensateInventory": {
+      "Type": "Task",
+      "Resource": "${RevertInventoryFunctionArn}",
+      "ResultPath": "$.compensateInventoryResult",
+      "Next": "CompensateChargePayment"
+    },
+    "CompensateChargePayment": {
+      "Type": "Task",
+      "Resource": "${RefundPaymentFunctionArn}",
+      "ResultPath": "$.compensatePaymentResult",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.compensationError",
+          "Next": "SagaFailed"
+        }
+      ],
+      "Next": "SagaFailed"
+    },
+    "SagaSucceeded": {
+      "Type": "Succeed"
+    },
+    "SagaFailed": {
+      "Type": "Fail",
+      "Error": "SagaCompensationFailed",
+      "Cause": "One or more compensation steps failed"
+    }
+  }
+}

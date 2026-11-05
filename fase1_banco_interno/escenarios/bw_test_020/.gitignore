@@ -1,0 +1,18 @@
+# SAM y compilación
+.aws-sam/
+bin/
+obj/
+
+# Dependencias
+node_modules/
+dist/
+
+# Archivos temporales y logs
+*.log
+item.json
+.DS_Store
+Thumbs.db
+
+# Secretos (por si acaso)
+.env
+*.pem

@@ -1,0 +1,45 @@
+# --- AWS SAM & Build Artifacts ---
+.aws-sam/
+samconfig.toml
+# Descomenta la siguiente línea si no quieres que el script de test sea visible en el repo (para no darle pistas a la IA)
+# ejecutar_test.ps1
+
+# --- Test Outputs & CLI Artifacts ---
+# Estos archivos contienen los resultados de las ejecuciones. 
+# Ignorarlos evita que la IA vea "la respuesta" del deadlock en el historial de Git.
+out.json
+out_init.json
+*.log
+
+# --- Python Environment & Bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+
+# --- IDEs & OS Files ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Others ---
+.antigravityignore
+ejecutar_test.ps1

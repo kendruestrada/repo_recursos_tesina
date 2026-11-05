@@ -1,0 +1,31 @@
+Síntoma Reportado:
+Algunas compras no se pueden realizar, por un error que dice "precio manipulado"
+
+Flujo del Error:
+1. Lambda ProductPricing obtiene precios de DynamoDB y los cachea en ElastiCache (TTL 1 hora)
+2. Admin actualiza precio de producto en DynamoDB (rebaja de $100 a $80)
+3. Lambda ProductPricing sigue sirviendo precio desde caché ($100)
+4. Pero Lambda InventoryCheck (que NO usa caché) valida stock con precio actualizado ($80)
+5. Al hacer checkout, hay mismatch: UI muestra $100, backend valida contra $80
+6. Validation layer rechaza la compra por "precio manipulado"
+
+Causa Raíz:
+- Cache invalidation no funciona correctamente
+- DynamoDB Streams que debían invalidar caché tienen delay de 30-60 segundos
+- Algunos usuarios caen en la ventana de inconsistencia
+- Error solo ocurre con productos que cambiaron precio recientemente
+
+Desafío para MCP:
+- Debe buscar logs de ProductPricing (caché hit)
+- Debe buscar logs de InventoryCheck (precio actualizado)
+- Debe buscar logs de DynamoDB Streams (delay)
+- Debe correlacionar timestamps entre eventos
+
+Desafío sin-MCP:
+- ¿Cómo saber que es un problema de caché si el síntoma es "precio incorrecto"?
+
+Preguntas:
+2.- Algunas compras no se pueden realizar, por un error que dice "precio manipulado"
+3.- Algunas compras no se pueden realizar, por un error que dice "precio manipulado": El resultado esperado sería:
+- es que no haya nunca inconsistencias en los precios.
+

@@ -1,0 +1,54 @@
+{
+  "session_id": "8507c75f-5acb-4632-9f26-a4409f318354",
+  "response": "## [Titulo]: Fuga de memoria en caché global durante la generación de reportes\n### Resumen: La aplicación agota la memoria configurada de la Lambda debido a un crecimiento persistente al acumular datos de cada ejecución en una variable global.\n### Severidad: Critical\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Realizar múltiples peticiones continuas al endpoint para solicitar la generación de reportes PDF.\n  2. Monitorear el incremento gradual de la memoria en uso a través de los reportes en CloudWatch.\n  3. Repetir el proceso hasta que la Lambda rebase su límite de capacidad (128 MB) y se interrumpa el servicio.\n- Esperado vs. Actual:\n  - Esperado: El consumo de memoria debe mantenerse acotado y estable; la memoria transitoria utilizada para generar un reporte debe ser recolectada al terminar la ejecución, permitiendo que la aplicación se mantenga rápida independiente de la cantidad de peticiones.\n  - Actual: Debido a la reutilización del entorno de ejecución de la Lambda, el estado de las variables globales perdura. En cada invocación, la función añade a la lista global un documento de plantilla y una lista numérica cuyo tamaño aumenta secuencialmente. Esto origina lentitud por sobrecarga y posteriormente caídas del servicio por falta de memoria.\n  - Ejemplo de ejecución: En la primera llamada (`count` = 1) se reserva en memoria una lista de 100,000 elementos. En la llamada número 50 (`count` = 50), la función intenta agregar una lista de 5,000,000 elementos al arreglo global que ya contiene las llamadas previas, ocasionando un cuelgue inminente.\n- Ubicacion del error (file/function):\n  - Archivo: `lambda/report.py`\n  - Función: `template()` y declaración de variables globales (`TEMPLATE_CACHE = []` y `count = 0`).\n- Logs relevantes:\n  - `REPORT RequestId: 57f78843-e2ba-43ee-b596-2abd2d2ad9f4 Duration: 6090.59 ms Billed Duration: 6091 ms Memory Size: 128 MB Max Memory Used: 127 MB Status: error Error Type: Runtime.OutOfMemory`\n### Propuesta de Solucion\n1. Remover el almacenamiento innecesario de objetos generados y listas pesadas en la variable global `TEMPLATE_CACHE`, particularmente borrando la instrucción donde se anexa la información a esta lista compartida.\n2. Eliminar la generación secuencial masiva de registros (`my_list`) que provocan directamente el desbordamiento.\n3. En caso de requerir un sistema de caché real para las plantillas, se debe implementar una estructura que limite su capacidad (por ejemplo, vaciar la lista pasada cierta cantidad o usar algoritmos como LRU), o bien integrar servicios de retención externa como ElastiCache o DynamoDB.\n4. Evaluar si la capacidad de memoria base de 128 MB definida en `lib/test_009-stack.ts` es la óptima para las operaciones de la biblioteca FPDF una vez corregida la fuga de memoria.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 60257
+        },
+        "tokens": {
+          "input": 25736,
+          "prompt": 46028,
+          "candidates": 769,
+          "total": 49715,
+          "cached": 20292,
+          "thoughts": 2918,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 3454,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3454,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

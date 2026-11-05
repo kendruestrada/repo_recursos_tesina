@@ -1,0 +1,437 @@
+{
+  "credentials": [
+    {
+      "name": "runner-github-personal",
+      "type": "github_pat",
+      "token": "<GITHUB_TOKEN_REDACTADO>"
+    },
+    {
+      "name": "runner-aws-personal",
+      "type": "cloudwatch",
+      "accessKeyId": "<REDACTADO>",
+      "secretAccessKey": "<REDACTADO>",
+      "sessionToken": "<REDACTADO>",
+      "region": "us-east-1",
+      "forceUpdate": true
+    },
+    {
+      "name": "runner-bitbucket-personal",
+      "type": "bitbucket_api_token",
+      "token": "<REDACTADO>",
+      "username": "usuario@example.com"
+    },
+    {
+      "name": "runner-aws-bwz-tests",
+      "type": "cloudwatch",
+      "accessKeyId": "<REDACTADO>",
+      "secretAccessKey": "<REDACTADO>",
+      "sessionToken": "<REDACTADO>",
+      "region": "us-east-1",
+      "forceUpdate": true
+    }
+  ],
+  "projects": [
+    {
+      "name": "runner-pasarela de pago",
+      "context": "servicio simple de pasarela de pagos",
+      "sources": {
+        "repository": "fleiva413/bw-payment-gateway",
+        "credentials": "runner-github-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/bw-payment-gateway-bff",
+          "/aws/lambda/bw-payment-gateway-payment-gateway-a",
+          "/aws/lambda/bw-payment-gateway-payment-gateway-b"
+        ],
+        "credentials": "runner-aws-personal"
+      },
+      "analyze": false
+    },
+    {
+      "name": "runner-test-001",
+      "context": "This project process purchases validating before some information like email and address. source code is on folder @src, @frontend and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_001",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/t001-validate-address",
+          "/aws/lambda/t001-process-purchase"
+        ],
+        "credentials": "runner-aws-bwz-tests",
+        "range": {
+          "startTime": "2026-01-20",
+          "endTime": "2026-01-22"
+        }
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error. la aplicación deberia funcionar como sigue:\n- usuario llena los datos del formulario.\n- los datos son validados\n- si la validacion es correcta se debe habilitar el boton \"comprar\"\n- al presionar el boton comprar se deberia seguir con el flujo de compra"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-002",
+      "context": "This project get and save a transaction, and call an external service to confirm it. source code is on folder @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_002",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/bw-002-SavePayment"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente, el sietema funciona como sigue:\n- cuando el usuario completa la compra es redirigido a una plataforma externa que procesa el pago.\n- esa platafroma externa una vez que el usuario completo el pago redirige a una url nuestra\n- a redirigir a la url , se gatilla el guardado del pago en nuestros sistemas\n- una vez guardado en nuestros sistemas le informamos a la plataforma externa este guardado."
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-003",
+      "context": "This project transfer insurance policies validating business rules. source code is on folder @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_003",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/TransferPolicyFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La póliza 144534 no pudo ser traspasada",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La póliza 144534 no pudo ser traspasada. la aplicacion deberia funcionar como sigue:\n- se llama a la funcion para traspasar la poliza\n- esta funcion busca los datos de la poliza y realiza validaciones y calculos necesarios.\n- antes de traspasar se valida que todo este correcto.\n- si todos esta correcto se traspasa la poliza"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-004",
+      "context": "This project create user subscriptions and propagate permissions async. source code is on folder @lambda_a, @lambda_b and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_004",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/lambda-a-create-subscription",
+          "/aws/lambda/lambda-b-sync-permissions"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium, la funcion deberia funcionar como sigue:\n- guardar la suscripción de DynamoDB\n- inbediatamente despues llamar a una funcion que cambia los permisos en cognito, (si esto falla esta definido un mecanismo de reintentos)"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-005",
+      "context": "This project store credit info and call an external service for validation. source code is on folder @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_005",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/test-005-RiskAnalysis",
+          "/aws/lambda/test-005-CreditEvaluation"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-006",
+      "context": "This project manage product prices, and use a redis cluster for price cache. source code is on folder @cache_invalidation, @update_price, @product_pricing, @inventory_check, @checkout and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_006",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/dev-ProductPricingFunction",
+          "/aws/lambda/dev-InventoryCheckFunction",
+          "/aws/lambda/dev-CheckoutFunction",
+          "/aws/lambda/dev-UpdatePriceFunction",
+          "/aws/lambda/dev-CacheInvalidationFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-007",
+      "context": "A serverless payments processing API built with AWS CDK (TypeScript) and Lambda functions (Python). source code is on folders @bin, @lib and @lambda",
+      "sources": {
+        "repository": "org/bw_test_007",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/EmailServiceFunction",
+          "/aws/lambda/OrderProcessingFunction",
+          "/aws/lambda/PaymentConfirmationFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-008",
+      "context": "This project is an banking api wich manage account, and can transfer amounts between them. source code is on folder @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_008",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/TransferProcessorFunction",
+          "/aws/lambda/TransferApiFunction",
+          "/aws/lambda/GetAccountFunction",
+          "/aws/lambda/CreateAccountFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "There's inconsistency on transfers amount, losing money. revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-010",
+      "context": "This project manage users registration and sent emails with SES. source code is on folders @src, @frontend and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_010",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/UserRegistrationFunction",
+          "/aws/lambda/SendEmailServiceFunction",
+          "/aws/lambda/SearchUsersFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-011",
+      "context": "This project get orders and send a message to a queue to send emails. source code is on folders @email_sender, @process_order and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_011",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/ProcessOrderFunction",
+          "/aws/lambda/EmailSenderFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-012",
+      "context": "This project update stock for an item saved on dynamo. source code is on folders @inventory_handler and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_012",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/InventoryFunction-bwtest-012"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-013",
+      "context": "This project return what it gets. source code is on folders @app and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_013",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/data-processor-t13"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest\n- El endpoint recibe el payload de la llamada y lo responde"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-014",
+      "context": "This project updates loyalty points for an user. source code is on folders @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_014",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/UpdateLoyaltyPointsFunction",
+          "/aws/lambda/ProcessPurchaseFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación registra de forma erronea los puntos de fidelidad de los usuarios.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación registra de forma erronea los puntos de fidelidad de los usuarios. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest\n- El endpoint recibe informacion de una compra y detalle de puntos ganados para un usuario\n- La aplicacion debe guardar esta informacion en base de datos"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-015",
+      "context": "This project manage photos, store them s3 and dynamo. source code is on folders @delete_photo, @list_photos, @upload_photo and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_015",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/dev-UploadPhoto",
+          "/aws/lambda/dev-DeletePhoto",
+          "/aws/lambda/dev-ListPhotos"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil. la aplicación deberia funcionar como sigue:\n- La aplicacion expone endpoints en una api rest para gestionar fotografias de un usuario\n- La aplicacion permite eliminar fotografias por ejemplo la foto de perfil\n- La aplicacion permite subir fotografias para un usuario\n- La aplicacion permite obtener el listado de fotografias de un usuario"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-016",
+      "context": "This project do transaction from one account to another. source code is on folders @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_016",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/test-016-acc-setup",
+          "/aws/lambda/test-016-transfer-processor"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas. la aplicación deberia funcionar como sigue:\n- La aplicacion expone endpoints en una api rest para realizar transferencias entre cuentas\n- Antes de transferir debe generar un identificador de transaccion\n- Se debe reservar los fondos y llamar a un servicio que valida la integridad de estos\n- Posterior a la validacion se realiza la transferencia y se libera la reserva"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-018",
+      "context": "This project manage a workflow for Orders, considering payment, inventory and email notifications. source code is on folders @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_018",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/TriggerOrderFunction",
+          "/aws/lambda/ChargePaymentFunction",
+          "/aws/lambda/UpdateInventoryFunction",
+          "/aws/lambda/SendToWarehouseFunction",
+          "/aws/lambda/SendConfirmationEmailFunction",
+          "/aws/lambda/RevertInventoryFunction",
+          "/aws/lambda/RefundPaymentFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest para procesar una orden de compra\n- Se debe procesar el pago, luego actualizar el inventario, luego enviar el producto a la bodega, y finalmente notificar por correo electronico al usuario"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-019",
+      "context": "This project get products items from dynamo table. source code is on folders @product_service and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_019",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/SearchProductsFunction",
+          "/aws/lambda/SeedDataFunction",
+          "/aws/lambda/LoadGeneratorFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest obtener un listado de productos filtrados por categoria\n- Los productos deben estar categorizados en una base de datos"
+      ],
+      "analyze": true
+    },
+    {
+      "name": "runner-test-020",
+      "context": "This project check if a user have an active session on dynamo. source code is on folders @src and @template.yml file",
+      "sources": {
+        "repository": "org/bw_test_020",
+        "credentials": "runner-bitbucket-personal"
+      },
+      "logs": {
+        "provider": "cloudwatch",
+        "logGroups": [
+          "/aws/lambda/UserProfileFunction"
+        ],
+        "credentials": "runner-aws-bwz-tests"
+      },
+      "prompts": [
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos.",
+        "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest para validar que un usuario tenga una sesion activa\n- Las sesiones activas se validan contra una base de datos\n- La aplicacion utiliza tokens jwt y deben ser validados para utilizar el servicio"
+      ],
+      "analyze": true
+    }
+  ]
+}

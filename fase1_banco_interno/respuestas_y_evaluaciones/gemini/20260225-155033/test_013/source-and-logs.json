@@ -1,0 +1,54 @@
+{
+  "session_id": "d2d057bd-6f47-4581-9a46-16ace2b3f8f0",
+  "response": "## [Titulo]: Fuga de conexiones provocando timeouts por bloqueo\n### Resumen: La función Lambda se queda sin conexiones disponibles en el pool tras procesar exitosamente 5 peticiones, lo que bloquea infinitamente las siguientes ejecuciones.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir: Ejecutar más de 5 peticiones exitosas continuas a la función Lambda de forma que sean procesadas por la misma instancia del contenedor (mismo Node_ref). A partir de la sexta petición, la aplicación dejará de responder.\n- Esperado vs. Actual: Se espera que la conexión extraída del pool de conexiones se devuelva al finalizar la petición. Actualmente, la conexión solo se libera dentro del bloque `except` (`connection_pool.putconn(conn)`), por lo que las peticiones exitosas nunca devuelven la conexión, agotando las 5 conexiones configuradas (`maxconn=5`) y causando un bloqueo en la función `self._semaphore.acquire()` para futuras llamadas a `getconn()`.\n- Ubicacion del error (file/function): \n  - Archivo: `app/app.py`\n  - Función: `lambda_handler` (falta de liberación de conexión en la ruta principal).\n- Logs relevantes: En los logs se observa que después de registrar 5 peticiones muy rápidas que completan en milisegundos en el mismo Node, la sexta petición solo registra el evento de inicio y posteriormente falla por tiempo máximo excedido:\n  - `[INFO] ... START - Node:01202491 - Request:74715b57-65ea-4e86-a73a-2ca31e4b7e65`\n  - `REPORT RequestId: 74715b57-65ea-4e86-a73a-2ca31e4b7e65 Duration: 30000.00 ms ... Status: timeout`\n### Propuesta de Solucion\nModificar la estructura de manejo de excepciones en la función `lambda_handler` para incluir un bloque `finally`. De esta manera, se garantizará que la llamada a `connection_pool.putconn(conn)` se ejecute siempre, independientemente de si la petición finalizó exitosamente o si se encontró con un error, previniendo el agotamiento del semáforo.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 35624
+        },
+        "tokens": {
+          "input": 40683,
+          "prompt": 56897,
+          "candidates": 591,
+          "total": 59328,
+          "cached": 16214,
+          "thoughts": 1840,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 3443,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3443,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

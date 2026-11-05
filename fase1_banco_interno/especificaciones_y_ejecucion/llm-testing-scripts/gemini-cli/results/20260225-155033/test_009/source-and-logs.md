@@ -1,0 +1,37 @@
+## Fuga de Memoria en AWS Lambda debido a Caché Global
+### Resumen: La aplicación sufre de una fuga de memoria provocada por el almacenamiento continuo de listas grandes en una variable global, lo que agota la memoria de 128 MB del contenedor tras repetidas ejecuciones.
+### Severidad: High
+### Analisis de causa raiz
+- **Pasos para reproducir**: Realizar peticiones consecutivas al endpoint `/report` que invoca la función Lambda `ReportGenerator`.
+- **Esperado vs. Actual**: Se espera que la memoria se mantenga estable y se libere tras la generación del documento. Sin embargo, el tamaño de la memoria utilizada aumenta en cada invocación hasta que el proceso agota los 128 MB de memoria asignada, provocando lentitud progresiva y finalmente la interrupción del servicio (crashes de contenedor).
+- **Ubicacion del error**: `lambda/report.py` en la función `template()`. La variable global `TEMPLATE_CACHE` definida en la cabecera del fichero añade objetos (que incluyen un array gigante `my_list` y el template completo `f`) en cada invocación, impidiendo que el Garbage Collector libere esta memoria.
+- **Logs relevantes**:
+  - `List size: 4167352 bytes, count: 5`
+  - `REPORT RequestId: [...] Memory Size: 128 MB Max Memory Used: 128 MB Status: error Error Type: Runtime.OutOfMemory`
+
+### Propuesta de Solucion
+1. **Evitar variables globales acumulativas**: Eliminar el uso de la variable global `TEMPLATE_CACHE` para almacenar estados infinitos. Si solo se necesita el conteo para un header, bastaría con mantener un contador global (`count`), sin almacenar las estructuras de datos pesadas en memoria.
+2. **Re-scoping o Limpieza**: Si es estrictamente necesario cachear los templates generados para la sesión activa, implementar una estrategia de limpieza que vacíe el caché al final de la invocación dentro de `handler(event, context)` o utilizar una caché basada en políticas de descarte (como LRU o limitación por tamaño máximo). Sin embargo, según la lógica del código, simplemente declarar estas variables con alcance local (scope) en lugar de global eliminaría por completo la fuga de memoria al dejar que el recolector de basura las libere.
+3. **Optimización del código**: Eliminar la lista inofensiva pero muy costosa `my_list = [i for i in range(100000 * count)]` si no tiene utilidad real para la respuesta más allá del debug.
+
+# Token Usage
+
+Total Tokens: 126625
+Prompt Tokens: 124727
+Input Tokens (non-cached): 71752
+Response Tokens: 694
+Cached Tokens: 52975
+Thoughts Tokens: 1204
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.143504
+Cached Cost (USD):  $0.010595
+Output Cost (USD):  $0.008328
+Thoughts Cost (USD):$0.014448
+Total Cost (USD):   $0.176875
+
+
+# Execution time in seconds:
+
+54

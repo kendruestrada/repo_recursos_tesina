@@ -1,0 +1,33 @@
+Síntoma Reportado:
+"Algunas solicitudes de crédito quedan 'en proceso' indefinidamente"
+
+Flujo del Error:
+1. Lambda CreditEvaluation recibe solicitud y la guarda con status = "pending"
+2. Invoca a Lambda RiskAnalysis de forma síncrona (RequestResponse)
+3. Lambda RiskAnalysis necesita datos de la solicitud, así que consulta DynamoDB
+4. Mientras consulta, Lambda CreditEvaluation está esperando respuesta (aún no commit)
+5. Si hay concurrencia alta, DynamoDB puede tener read throttling
+6. Lambda RiskAnalysis hace retry pero CreditEvaluation ya hizo timeout
+7. Queda registro en "pending" sin resolver
+
+Causa Raíz:
+- Invocación síncrona crea dependencia circular implícita
+- Throttling de DynamoDB bajo carga hace que RiskAnalysis tarde más
+- CreditEvaluation hace timeout (30s) antes de que RiskAnalysis termine
+- No hay manejo de timeout, queda estado zombie
+
+Desafío para MCP:
+- Debe encontrar AMBOS lambdas en los logs
+- Debe correlacionar RequestId entre invocaciones
+- Debe identificar el throttling de DynamoDB (CloudWatch Metrics)
+- Debe entender que el diseño arquitectural es el problema
+
+Desafío sin-MCP:
+- Prácticamente imposible sin ver logs de ambos + métricas de DynamoDB
+
+Preguntas:
+1.- Algunas solicitudes de crédito quedan 'en proceso' indefinidamente"     
+2.- Algunas solicitudes de crédito quedan 'en proceso' indefinidamente", el flujo deberia se como sigue;
+- un lambda recibe la solicitud y guarda el estado pending
+- se consuta otro lambda para evaluar el riesgo
+- una vez evaluado el riesgo se deberia actualizar el estado de la solicitud

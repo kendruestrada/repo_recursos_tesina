@@ -1,0 +1,41 @@
+{
+  "session_id": "04d5383b-07aa-4868-a542-c95e8c668fb0",
+  "response": "## Fuga de conexiones en pool por omisión de liberación en flujo exitoso\n### Resumen: La función lambda agota las conexiones del pool al no devolverlas durante las ejecuciones que terminan correctamente, provocando un bloqueo total del proceso después de cinco peticiones.\n### Severidad: Critical\n### Analisis de causa raiz\n- Pasos para reproducir: \n  1. Enviar cinco peticiones válidas y exitosas a la función lambda utilizando el mismo contenedor caliente de ejecución. \n  2. Enviar una sexta petición. \n  3. La sexta petición se quedará bloqueada indefinidamente, ya que el pool alcanzó su límite de 5 conexiones y la ejecución se suspenderá hasta que la función lambda alcance su tiempo límite (timeout).\n- Esperado vs. Actual: \n  Esperado: Toda conexión obtenida del pool (connection_pool.getconn()) debe ser devuelta una vez que finaliza el procesamiento de la petición, sin importar el resultado. \n  Actual: La función libera la conexión (connection_pool.putconn(conn)) exclusivamente dentro del bloque \"except\". Si el flujo es exitoso y retorna código 200, la conexión nunca es liberada, causando una fuga de recursos.\n- Ubicacion del error: app/app.py / función lambda_handler\n- Logs relevantes: No existen trazas de error en los logs iniciales de ejecución. Al presentarse la falla, el único indicio observable será un \"Task timed out\" emitido por la infraestructura al bloquearse de forma permanente el hilo en la adquisición del semáforo.\n### Propuesta de Solucion\nRefactorizar el manejo de excepciones en la función lambda_handler utilizando una estructura \"try-except-finally\". La liberación de la conexión mediante el método \"connection_pool.putconn(conn)\" debe trasladarse al bloque \"finally\", retirándose del bloque \"except\". Esto asegurará de manera determinista que la conexión retorne al pool en todos los escenarios posibles (éxito o fallo de la transacción).",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 1,
+          "totalErrors": 0,
+          "totalLatencyMs": 31098
+        },
+        "tokens": {
+          "input": 2783,
+          "prompt": 10839,
+          "candidates": 433,
+          "total": 13262,
+          "cached": 8056,
+          "thoughts": 1990,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 0,
+      "totalSuccess": 0,
+      "totalFail": 0,
+      "totalDurationMs": 0,
+      "totalDecisions": {
+        "accept": 0,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {}
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

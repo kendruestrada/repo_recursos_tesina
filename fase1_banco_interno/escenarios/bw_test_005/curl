@@ -1,0 +1,7 @@
+# POST /credit - Crear solicitud de credito
+# Guarda con status="pending" e invoca RiskAnalysis
+curl --location 'https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/credit' \
+--header 'Content-Type: application/json' \
+--data '{
+    "credit_id": "123"
+}'

@@ -1,0 +1,106 @@
+{
+  "session_id": "e0dd28e3-23b0-449c-8d98-8736d902600f",
+  "response": "Al analizar exhaustivamente el código fuente y los logs provistos, se determina lo siguiente:\n\n## [Titulo]: Nombres truncados al contener caracteres especiales\n### Resumen: Los nombres de usuario con tildes aparecen cortados en los perfiles, pero los logs evidencian que se almacenan correctamente en la base de datos.\n### Severidad: Medium\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Registrar un usuario con nombre que contenga tildes (ej. José) desde el frontend.\n  2. Ejecutar la búsqueda del usuario registrado para ver su perfil.\n  3. Observar que el nombre recuperado está truncado antes de la tilde (ej. Jos).\n- Esperado vs. Actual: Se espera que el sistema guarde y devuelva el nombre completo \"José\". Actualmente devuelve \"Jos\".\n- Ubicacion del error (file/function): No identificada directamente en la lógica del código fuente (Información insuficiente).\n- Logs relevantes: \n  Log de SendEmailServiceFunction: `{\"event\":\"DispatchingEmailToSES\", ... ,\"Body\":{\"Text\":{\"Data\":\"\\n        Hello Jos\\u00e9 Garc\\u00eda,\\n...\"}}}`\n\nTras revisar los registros de CloudWatch, no se hallaron errores, fallas ni excepciones en el flujo de las funciones Lambda. De hecho, el log de `SendEmailServiceFunction` demuestra que el evento de inserción en DynamoDB contiene el nombre íntegro y correcto (`Jos\\u00e9` es la representación JSON de \"José\"). Esto confirma inequívocamente que `register.ts` guarda el dato completo y que DynamoDB no lo trunca. \n\nPor otro lado, la función `search.ts` se limita a ejecutar un `GetCommand` o `ScanCommand` y devolver el resultado empaquetado mediante `JSON.stringify(response.Item)`, sin aplicar ninguna lógica de manipulación de cadenas (como un `substring` o expresiones regulares). Al no existir errores de ejecución ni código que altere los strings, no hay información suficiente en el backend para determinar de forma absoluta la causa del truncamiento visualizado. El fallo parece provenir de una inconsistencia de codificación (encoding) al momento de retornar o renderizar la respuesta.\n\n### Propuesta de Solucion\nDado que no existe una falla lógica explícita en el código, se sugieren las siguientes pruebas adicionales y soluciones alternativas para obtener más datos:\n\n1. **Forzar codificación UTF-8 en respuestas:** Modificar el retorno de los handlers en `search.ts` y `register.ts` para incluir explícitamente el encabezado de charset. El API Gateway puede estar omitiéndolo, causando que el cliente interprete mal los bytes:\n   `headers: { \"Content-Type\": \"application/json; charset=utf-8\" }`\n2. **Depuración de entrada/salida (Logs adicionales):** Imprimir en consola el valor crudo de `event.body` y el estado de `event.isBase64Encoded` en las lambdas para confirmar si el API Gateway está alterando el payload de forma silenciosa por considerarlo binario.\n3. **Inspección del tráfico de red:** Utilizar las herramientas de desarrollador del navegador para revisar la pestaña \"Network\" y validar si el JSON devuelto por el API de búsqueda ya viene truncado desde AWS, o si el truncamiento ocurre en la asignación del cliente (`resultDiv.innerHTML`).",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 47,
+          "totalErrors": 0,
+          "totalLatencyMs": 895081
+        },
+        "tokens": {
+          "input": 416458,
+          "prompt": 4658667,
+          "candidates": 3759,
+          "total": 4706261,
+          "cached": 4242209,
+          "thoughts": 43835,
+          "tool": 0
+        }
+      },
+      "gemini-2.5-flash": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 15282
+        },
+        "tokens": {
+          "input": 61758,
+          "prompt": 61758,
+          "candidates": 362,
+          "total": 64556,
+          "cached": 0,
+          "thoughts": 2436,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 46,
+      "totalSuccess": 46,
+      "totalFail": 0,
+      "totalDurationMs": 64573,
+      "totalDecisions": {
+        "accept": 46,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 4,
+          "success": 4,
+          "fail": 0,
+          "durationMs": 11668,
+          "decisions": {
+            "accept": 4,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 10,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "search_logs": {
+          "count": 9,
+          "success": 9,
+          "fail": 0,
+          "durationMs": 28609,
+          "decisions": {
+            "accept": 9,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 30,
+          "success": 30,
+          "fail": 0,
+          "durationMs": 24286,
+          "decisions": {
+            "accept": 30,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

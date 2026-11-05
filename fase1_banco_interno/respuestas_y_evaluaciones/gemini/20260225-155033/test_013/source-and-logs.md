@@ -1,0 +1,36 @@
+## [Titulo]: Fuga de conexiones provocando timeouts por bloqueo
+### Resumen: La función Lambda se queda sin conexiones disponibles en el pool tras procesar exitosamente 5 peticiones, lo que bloquea infinitamente las siguientes ejecuciones.
+### Severidad: High
+### Analisis de causa raiz
+- Pasos para reproducir: Ejecutar más de 5 peticiones exitosas continuas a la función Lambda de forma que sean procesadas por la misma instancia del contenedor (mismo Node_ref). A partir de la sexta petición, la aplicación dejará de responder.
+- Esperado vs. Actual: Se espera que la conexión extraída del pool de conexiones se devuelva al finalizar la petición. Actualmente, la conexión solo se libera dentro del bloque `except` (`connection_pool.putconn(conn)`), por lo que las peticiones exitosas nunca devuelven la conexión, agotando las 5 conexiones configuradas (`maxconn=5`) y causando un bloqueo en la función `self._semaphore.acquire()` para futuras llamadas a `getconn()`.
+- Ubicacion del error (file/function): 
+  - Archivo: `app/app.py`
+  - Función: `lambda_handler` (falta de liberación de conexión en la ruta principal).
+- Logs relevantes: En los logs se observa que después de registrar 5 peticiones muy rápidas que completan en milisegundos en el mismo Node, la sexta petición solo registra el evento de inicio y posteriormente falla por tiempo máximo excedido:
+  - `[INFO] ... START - Node:01202491 - Request:74715b57-65ea-4e86-a73a-2ca31e4b7e65`
+  - `REPORT RequestId: 74715b57-65ea-4e86-a73a-2ca31e4b7e65 Duration: 30000.00 ms ... Status: timeout`
+### Propuesta de Solucion
+Modificar la estructura de manejo de excepciones en la función `lambda_handler` para incluir un bloque `finally`. De esta manera, se garantizará que la llamada a `connection_pool.putconn(conn)` se ejecute siempre, independientemente de si la petición finalizó exitosamente o si se encontró con un error, previniendo el agotamiento del semáforo.
+
+# Token Usage
+
+Total Tokens: 59328
+Prompt Tokens: 56897
+Input Tokens (non-cached): 40683
+Response Tokens: 591
+Cached Tokens: 16214
+Thoughts Tokens: 1840
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.081366
+Cached Cost (USD):  $0.003243
+Output Cost (USD):  $0.007092
+Thoughts Cost (USD):$0.022080
+Total Cost (USD):   $0.113781
+
+
+# Execution time in seconds:
+
+49

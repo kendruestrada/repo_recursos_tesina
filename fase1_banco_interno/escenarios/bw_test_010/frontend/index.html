@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Registration & Search</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            margin-bottom: 30px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        input,
+        select,
+        button {
+            margin: 5px 0;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border: 1px solid #eee;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>User System</h1>
+
+    <!-- IMPORTANT: Update this URL after deployment -->
+    <script>
+        const API_URL = "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com";
+    </script>
+
+    <div class="container">
+        <h2>Register User</h2>
+        <form id="registerForm">
+            <input type="email" id="regEmail" placeholder="Email" required>
+            <input type="text" id="regFirstName" placeholder="First Name" required>
+            <input type="text" id="regLastName" placeholder="Last Name" required>
+            <input type="date" id="regBirthDate" placeholder="Birth Date" required>
+            <select id="regGenre" required>
+                <option value="">Select Genre</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+            </select>
+            <button type="submit">Register</button>
+        </form>
+        <div id="regMessage" class="result hidden"></div>
+    </div>
+
+    <div class="container">
+        <h2>Search User</h2>
+        <input type="text" id="searchEmail" placeholder="Enter email to search (leave empty for list)">
+        <button id="searchBtn">Search</button>
+        <div id="searchResult" class="result hidden"></div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageDiv = document.getElementById('regMessage');
+            messageDiv.textContent = 'Registering...';
+            messageDiv.classList.remove('hidden');
+
+            const data = {
+                email: document.getElementById('regEmail').value,
+                first_name: document.getElementById('regFirstName').value,
+                last_name: document.getElementById('regLastName').value,
+                birth_date: document.getElementById('regBirthDate').value,
+                genre: document.getElementById('regGenre').value
+            };
+
+            try {
+                // Determine if we need to append /users or if the base URL already has it
+                const response = await fetch(`${API_URL}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                messageDiv.textContent = `Status: ${response.status} - ${result.message || JSON.stringify(result)}`;
+            } catch (err) {
+                messageDiv.textContent = 'Error: ' + err.message;
+            }
+        });
+
+        document.getElementById('searchBtn').addEventListener('click', async () => {
+            const email = document.getElementById('searchEmail').value;
+            const resultDiv = document.getElementById('searchResult');
+            resultDiv.textContent = 'Searching...';
+            resultDiv.classList.remove('hidden');
+
+            try {
+                let url = `${API_URL}/users/search`;
+                if (email) {
+                    url += `?email=${encodeURIComponent(email)}`;
+                }
+
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+                } else {
+                    resultDiv.textContent = result.message || 'Error occurred';
+                }
+            } catch (err) {
+                resultDiv.textContent = 'Error: ' + err.message;
+            }
+        });
+    </script>
+</body>
+
+</html>

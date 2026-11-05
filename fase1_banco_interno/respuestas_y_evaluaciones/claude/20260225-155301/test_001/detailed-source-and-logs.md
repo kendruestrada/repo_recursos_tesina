@@ -1,0 +1,118 @@
+Con todo el contexto disponible, procedo al análisis completo.
+
+---
+
+## Boton "Comprar" no completa el flujo de compra
+
+### Summary: El Lambda `validate-address` enmascara errores del proveedor externo devolviendo HTTP 200 con `address: null`, lo que habilita el boton "Comprar" con datos invalidos y provoca que `process-purchase` rechace silenciosamente la operacion.
+
+### Severity: High
+
+---
+
+### Root Cause Analysis
+
+**Cadena de falla (3 puntos encadenados):**
+
+**Punto 1 — `validate-address/index.js` lineas 17-27 (bug principal)**
+
+Cuando el proveedor externo de validacion retorna un codigo distinto de 200 (en los logs: `400 - Invalid address format`), el lambda ejecuta el bloque `if (audit.status !== 200)` y en lugar de retornar un HTTP error al cliente, retorna `statusCode: 200` con `address: null`:
+
+```js
+// validate-address/index.js:17-27
+if (audit.status !== 200) {
+    console.error(`External provider error: ${audit.status} - Invalid address format`);
+    const response = {
+        statusCode: 200,              // <-- BUG: deberia ser 4xx
+        body: JSON.stringify({ success: true, data: { name, email, address: null } })
+        //                                                       ^^^^^ null
+    };
+    return response;
+}
+```
+
+Los logs confirman que esto ocurre en **cada ejecucion** (72h de registros continuos, 100% de invocaciones):
+```
+ERROR  External provider error: 400 - Invalid address format
+INFO   Sync status: 200
+```
+
+**Punto 2 — `frontend/index.html` linea 26-28**
+
+El frontend solo verifica `res.status === 200`. Como el lambda siempre devuelve 200, el frontend ejecuta:
+```js
+s = r.data;  // s = { name, email, address: null }
+document.getElementById('b').disabled = false;  // boton habilitado con address: null
+```
+
+El boton "Comprar" se habilita aunque la validacion haya fallado.
+
+**Punto 3 — `process-purchase/index.js` linea 12 + `frontend/index.html` linea 36**
+
+El lambda `process-purchase` recibe `address: null` y rechaza con HTTP 400:
+```js
+// process-purchase/index.js:12
+if (!data || !data.address) {
+    console.error("Purchase rejected: shipping address is missing or null");
+    return { statusCode: 400, ... };
+}
+```
+
+Los logs lo confirman sistematicamente:
+```
+INFO  ProcessPurchase received customer data: {"name":"Maximiliano Lopez","email":"usuario@example.com","address":null}
+ERROR Purchase rejected: shipping address is missing or null
+```
+
+El frontend al recibir HTTP 400 no entra al bloque `if (res.status === 200)` y no actualiza el DOM. El div `#o` queda en "Processing..." sin feedback de error, por lo que el usuario percibe que el boton "no hace nada".
+
+---
+
+**Flujo esperado vs. flujo actual:**
+
+| Paso | Esperado | Actual |
+|---|---|---|
+| Proveedor externo falla | Lambda retorna error HTTP (4xx) al frontend | Lambda retorna HTTP 200 con `address: null` |
+| Frontend evalua respuesta | Boton "Comprar" permanece deshabilitado | Boton se habilita con datos invalidos |
+| Usuario presiona "Comprar" | No deberia poder hacerlo | Envia peticion con `address: null` |
+| `process-purchase` recibe datos | N/A | Rechaza con HTTP 400 |
+| Frontend recibe 400 | N/A | No muestra ningun error al usuario |
+
+---
+
+### Solution
+
+**Correccion principal — `src/validate-address/index.js` linea 21:**
+
+Cambiar `statusCode: 200` por un codigo de error (ej. `400` o `502`) cuando el proveedor externo falla. Esto impide que el frontend habilite el boton con datos invalidos:
+
+```js
+// Cambiar:
+statusCode: 200,
+// Por:
+statusCode: 400,
+```
+
+Tambien se debe actualizar el `body` para indicar el error en lugar de `success: true`.
+
+**Correccion secundaria — `frontend/index.html` linea 36:**
+
+Agregar un bloque `else` al handler del boton "Comprar" para mostrar el error al usuario cuando `process-purchase` retorna un codigo no-200:
+
+```js
+if (res.status === 200) {
+    // ... mostrar orderId
+} else {
+    document.getElementById('o').innerText = 'Error al procesar la compra. Intente nuevamente.';
+}
+```
+
+**Nota sobre el proveedor externo:** El error `400 - Invalid address format` del proveedor externo ocurre en el 100% de las invocaciones registradas. Adicionalmente se debe verificar que el valor de la variable de entorno `VALIDATION_SERVICE_URL` sea correcto y que el formato de la URL/parametros enviados al proveedor sea el esperado.
+
+# Total cost USD
+
+0.7036697500000001
+
+# Execution time in seconds: 
+
+85

@@ -1,0 +1,57 @@
+Síntoma Reportado:
+"La orden #98234 aparece como 'completada' pero el cliente dice que nunca recibió el email de confirmación ni el producto fue enviado al warehouse"
+
+Flujo del Error:
+1. Sistema usa Saga pattern para procesar órdenes (orquestado por Step Functions)
+2. Step Functions ejecuta pasos en secuencia:
+   - Paso 1: Lambda ChargePayment (cargo a tarjeta) ✅ SUCCESS
+   - Paso 2: Lambda UpdateInventory (reduce stock) ✅ SUCCESS
+   - Paso 3: Lambda SendToWarehouse (crear orden de envío) ❌ FAIL
+   - Paso 4: Lambda SendConfirmationEmail (no se ejecuta, depende de paso 3)
+3. Lambda SendToWarehouse falla por:
+   - Warehouse API retorna 503 Service Unavailable (mantenimiento programado)
+   - Lambda hace 3 retries automáticos, todos fallan
+4. Step Functions detecta el error y ejecuta compensating transactions:
+   - Compensa SendToWarehouse: (no hace nada, no había creado nada)
+   - Compensa UpdateInventory: Lambda RevertInventory ✅ SUCCESS
+   - Compensa ChargePayment: Lambda RefundPayment ❌ FAIL
+5. Lambda RefundPayment falla por:
+   - Payment gateway tiene rate limiting, retorna 429 Too Many Requests
+   - No hay retry configurado para compensations
+6. Step Functions marca la ejecución como "FAILED" pero:
+   - DynamoDB tabla "Orders" tiene status = "completed" (actualizado en paso 2)
+   - Actualización de status a "failed" se hace en paso final, que nunca se ejecuta
+7. Estado final inconsistente:
+   - Payment: Cargo realizado, NO refundado
+   - Inventory: Stock restaurado (compensación OK)
+   - Warehouse: Orden NO creada
+   - Email: NO enviado
+   - Order status en DB: "completed" (incorrecto)
+
+Causa Raíz:
+- Compensating transaction (RefundPayment) falló y no hay fallback
+- Order status no se actualiza cuando Saga falla
+- No hay eventual consistency checker para detectar estados inconsistentes
+- Rate limiting del payment gateway no se maneja en compensations
+- Saga pattern implementado sin garantías de atomicidad
+
+Desafío para MCP:
+- Debe buscar logs de Step Functions execution (ver qué pasos fallaron)
+- Debe buscar logs de cada Lambda individual (ChargePayment, SendToWarehouse, RefundPayment)
+- Debe correlacionar que RefundPayment falló en compensating transaction
+- Debe buscar estado de la orden en DynamoDB (ver status incorrecto)
+- Debe buscar eventos de payment gateway (ver que el cargo existe pero no el refund)
+- Debe entender el concepto de Saga pattern y compensating transactions
+- Debe verificar si el warehouse recibió la orden (call API o ver logs)
+
+Desafío sin-MCP:
+- El síntoma es vago: "orden completada pero inconsistente"
+- ¿Qué logs pasar? Necesitaría Step Functions + todos los Lambdas + estado de sistemas externos
+- Sin entender el Saga pattern, imposible ver que la compensación falló
+- Necesitaría verificar estado en múltiples sistemas (DB, payment gateway, warehouse)
+
+Preguntas:
+2.- La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega.
+3.- La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega. la aplicación deberia funcionar como sigue:
+- La aplicacion expone un endpoint en una api rest para procesar una orden de compra
+- Se debe procesar el pago, luego actualizar el inventario, luego enviar el producto a la bodega, y finalmente notificar por correo electronico al usuario

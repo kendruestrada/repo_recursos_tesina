@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM app - especificacion_test_005
+
+Parameters:
+  ProjectPrefix:
+    Type: String
+    Default: test-005
+  ProcessorUrl:
+    Type: String
+    Description: "URL del endpoint processor"
+
+Globals:
+  Function:
+    Timeout: '{{resolve:ssm:/config/lambda/generic/timeout}}'
+    Runtime: python3.12
+    MemorySize: 128
+    Tracing: Active
+  Api:
+    Name: !Sub "${ProjectPrefix}-Api"
+
+Resources:
+
+  CreditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectPrefix}-Credit"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: credit_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: credit_id
+          KeyType: HASH
+
+  RiskAnalysisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-RiskAnalysis"
+      RetentionInDays: 14
+
+  CreditEvaluationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectPrefix}-CreditEvaluation"
+      RetentionInDays: 14
+
+  RiskAnalysisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-RiskAnalysis"
+      CodeUri: src/risk/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref CreditTable
+          PROCESSOR_URL: !Ref ProcessorUrl
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref CreditTable
+
+  CreditEvaluationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectPrefix}-CreditEvaluation"
+      CodeUri: src/credit/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref CreditTable
+          RISK_LAMBDA_NAME: !Ref RiskAnalysisFunction
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource: !GetAtt RiskAnalysisFunction.Arn
+        - DynamoDBWritePolicy:
+            TableName: !Ref CreditTable
+      Events:
+        GetCreditApi:
+          Type: Api
+          Properties:
+            Path: /credit
+            Method: post
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/credit"
+
+  CreditTableName:
+    Description: "DynamoDB table name"
+    Value: !Ref CreditTable
+
+  RiskLambdaName:
+    Description: "RiskAnalysis Lambda name"
+    Value: !Ref RiskAnalysisFunction
+
+  RiskAnalysisLogGroupName:
+    Description: "RiskAnalysis Log Group name"
+    Value: !Ref RiskAnalysisLogGroup
+
+  CreditEvaluationLogGroupName:
+    Description: "CreditEvaluation Log Group name"
+    Value: !Ref CreditEvaluationLogGroup

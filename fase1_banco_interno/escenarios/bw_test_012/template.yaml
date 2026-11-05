@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  InventoryTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: SKU
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  InventoryCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: InventoryFunction-bwtest-012
+      CodeUri: src/inventory_handler/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      MemorySize: 128
+      Timeout: 15
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref InventoryTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InventoryTable
+      Events:
+        PurchaseApi:
+          Type: Api
+          Properties:
+            Path: /purchase
+            Method: post
+
+  InventoryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/InventoryFunction-bwtest-012
+      RetentionInDays: 7
+
+Outputs:
+  PurchaseApiUrl:
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/purchase/"

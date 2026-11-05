@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test010/Test010-1.md",
+    "nombre": "Test010-1.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:24"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-2.md",
+    "nombre": "Test010-2.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:25"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-3.md",
+    "nombre": "Test010-3.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:25"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-4.md",
+    "nombre": "Test010-4.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:27"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-5.md",
+    "nombre": "Test010-5.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:28"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-6.md",
+    "nombre": "Test010-6.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:29"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-7.md",
+    "nombre": "Test010-7.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:30"
+  },
+  {
+    "archivo": "D:/Downloads/Test010/Test010-8.md",
+    "nombre": "Test010-8.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-30 09:31"
+  }
+]

@@ -1,0 +1,527 @@
+{
+    "general-config": {
+        "aws-profile": "devAdmin",
+        "include-cost": true,
+        "add-summary": true,
+        "cw-mcp-server":
+            "{\"type\":\"stdio\",\"command\":\"uv\",\"args\":[\"--directory\",\"/Users/usuario/Documents/bugwizard/Log-Analyzer-with-MCP/src/cw-mcp-server\",\"run\",\"server.py\",\"--profile\",\"dev\"]}",
+        "cw-mcp-server-tools": [
+            "mcp__cw-mcp-server__list_log_groups",
+            "mcp__cw-mcp-server__search_logs",
+            "mcp__cw-mcp-server__search_logs_multi",
+            "mcp__cw-mcp-server__filter_log_events",
+            "mcp__cw-mcp-server__summarize_log_activity",
+            "mcp__cw-mcp-server__find_error_patterns",
+            "mcp__cw-mcp-server__correlate_logs"
+        ],
+        "instructions": [
+            "- dont read code comments",
+            "- dont use emojis",
+            "- dont read .md files"
+        ]
+    },
+    "projects": [
+        {
+            "name": "test_001",
+            "source": "git@example.com:org/bw_test_001.git",
+            "general-context": "This project process purchases validating before some information like email and address. source code is on folder @src, @frontend and @template.yml file",
+            "logs": [
+                "/aws/lambda/t001-validate-address",
+                "/aws/lambda/t001-process-purchase"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error. la aplicación deberia funcionar como sigue:\n- usuario llena los datos del formulario.\n- los datos son validados\n- si la validacion es correcta se debe habilitar el boton \"comprar\"\n- al presionar el boton comprar se deberia seguir con el flujo de compra"
+                }
+            ]
+        },
+        {
+            "name": "test_002",
+            "source": "git@example.com:org/bw_test_002.git",
+            "general-context": "This project get and save a transaction, and call an external service to confirm it. source code is on folder @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/bw-002-SavePayment"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente, el sietema funciona como sigue:\n- cuando el usuario completa la compra es redirigido a una plataforma externa que procesa el pago.\n- esa platafroma externa una vez que el usuario completo el pago redirige a una url nuestra\n- a redirigir a la url , se gatilla el guardado del pago en nuestros sistemas\n- una vez guardado en nuestros sistemas le informamos a la plataforma externa este guardado."
+                }
+            ]
+        },
+        {
+            "name": "test_003",
+            "source": "git@example.com:org/bw_test_003.git",
+            "general-context": "This project transfer insurance policies validating business rules. source code is on folder @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/TransferPolicyFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La póliza 144534 no pudo ser traspasada"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La póliza 144534 no pudo ser traspasada. la aplicacion deberia funcionar como sigue:\n- se llama a la funcion para traspasar la poliza\n- esta funcion busca los datos de la poliza y realiza validaciones y calculos necesarios.\n- antes de traspasar se valida que todo este correcto.\n- si todos esta correcto se traspasa la poliza"
+                }
+            ]
+        },
+        {
+            "name": "test_004",
+            "source": "git@example.com:org/bw_test_004.git",
+            "general-context": "This project create user subscriptions and propagate permissions async. source code is on folder @lambda_a, @lambda_b and @template.yml file",
+            "logs": [
+                "/aws/lambda/lambda-a-create-subscription",
+                "/aws/lambda/lambda-b-sync-permissions"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium, la funcion deberia funcionar como sigue:\n- guardar la suscripción de DynamoDB\n- inbediatamente despues llamar a una funcion que cambia los permisos en cognito, (si esto falla esta definido un mecanismo de reintentos)"
+                }
+            ]
+        },
+        {
+            "name": "test_005",
+            "source": "git@example.com:org/bw_test_005.git",
+            "general-context": "This project store credit info and call an external service for validation. source code is on folder @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/test-005-RiskAnalysis",
+                "/aws/lambda/test-005-CreditEvaluation"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunas solicitudes de crédito quedan 'en proceso' indefinidamente"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunas solicitudes de crédito quedan 'en proceso' indefinidamente, el flujo deberia se como sigue;\n- un lambda recibe la solicitud y guarda el estado pending\n- se consuta otro lambda para evaluar el riesgo\n- una vez evaluado el riesgo se deberia actualizar el estado de la solicitud"
+                }
+            ]
+        },
+        {
+            "name": "test_006",
+            "source": "git@example.com:org/bw_test_006.git",
+            "general-context": "This project manage product prices, and use a redis cluster for price cache. source code is on folder @cache_invalidation, @update_price, @product_pricing, @inventory_check, @checkout and @template.yml file",
+            "logs": [
+                "/aws/lambda/dev-ProductPricingFunction",
+                "/aws/lambda/dev-InventoryCheckFunction",
+                "/aws/lambda/dev-CheckoutFunction",
+                "/aws/lambda/dev-UpdatePriceFunction",
+                "/aws/lambda/dev-CacheInvalidationFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunas compras no se pueden realizar, por un error que dice \"precio manipulado\""
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Algunas compras no se pueden realizar, por un error que dice \"precio manipulado\": El resultado esperado sería:\n- es que no haya nunca inconsistencias en los precios."
+                }
+            ]
+        },
+        {
+            "name": "test_007",
+            "source": "git@example.com:org/bw_test_007.git",
+            "general-context": "A serverless payments processing API built with AWS CDK (TypeScript) and Lambda functions (Python). source code is on folders @bin, @lib and @lambda",
+            "logs": [
+                "/aws/lambda/EmailServiceFunction",
+                "/aws/lambda/OrderProcessingFunction",
+                "/aws/lambda/PaymentConfirmationFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación está completamente caída"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación está completamente caída, los siguientes servicios responden con error:\nOrderProcessing, PaymentConfirmation, EmailService"
+                }
+            ]
+        },
+        {
+            "name": "test_008",
+            "source": "git@example.com:org/bw_test_008.git",
+            "general-context": "This project is an banking api wich manage account, and can transfer amounts between them. source code is on folder @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/TransferProcessorFunction",
+                "/aws/lambda/TransferApiFunction",
+                "/aws/lambda/GetAccountFunction",
+                "/aws/lambda/CreateAccountFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "There's inconsistency on transfers amount, losing money. revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al transferir fondos entre cuentas, a veces el dinero 'desaparece'"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Al transferir fondos entre cuentas, a veces el dinero 'desaparece, Flujo correcto de aplicación:\n- El usuario solicita la transferencia.\n- El sistema \"congela\" ambas cuentas en una sola operación.\n- El dinero sale de una y entra en la otra simultáneamente.\n- Cualquier revisión de saldo espera a que movimientos terminen antes de mostrar la información.\nResultado: El dinero nunca desaparece de la vista del sistema ni del usuario."
+                }
+            ]
+        },
+        {
+            "name": "test_009",
+            "source": "git@example.com:org/test_009.git",
+            "general-context": "This project is an api wich generate a pdf report. source code is on folders @bin, @lib and @lambda",
+            "logs": [
+                "/aws/lambda/ReportGenerator"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Después de 2-3 horas de uso, la aplicación empieza a responder lento y eventualmente deja de responder"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Después de 2-3 horas de uso, la aplicación empieza a responder lento y eventualmente deja de responder\n- El usuario pide un reporte PDF.\n- El sistema toma el template necesario para armarlo.   \n- Se genera el documento y se le entrega al usuario.\nResultado: La aplicación siempre sea capaz de abordar las solicitudes, se mantenga ligera y rápida sin importar cuántos reportes se generen."
+                }
+            ]
+        },
+        {
+            "name": "test_010",
+            "source": "git@example.com:org/bw_test_010.git",
+            "general-context": "This project manage users registration and sent emails with SES. source code is on folders @src, @frontend and @template.yml file",
+            "logs": [
+                "/aws/lambda/UserRegistrationFunction",
+                "/aws/lambda/SendEmailServiceFunction",
+                "/aws/lambda/SearchUsersFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Usuarios con nombres con tildes (José, María) aparecen como 'Jos', 'Mar' en sus perfiles"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. Usuarios con nombres con tildes (José, María) aparecen como 'Jos', 'Mar' en sus perfiles\n- El usuario se registra con su nombre completo, incluyendo todos sus caracteres y tildes.\n- Los datos se guardan de forma segura.   \n- El sistema de correos se configura para reconocer cualquier alfabeto o símbolo especial.   \n- El mensaje se genera manteniendo la integridad del texto original.\nResultado: El usuario recibe su bienvenida con su nombre correctamente escrito."
+                }
+            ]
+        },
+        {
+            "name": "test_011",
+            "source": "git@example.com:org/bw_test_011.git",
+            "general-context": "This project get orders and send a message to a queue to send emails. source code is on folders @email_sender, @process_order and @template.yml file",
+            "logs": [
+                "/aws/lambda/ProcessOrderFunction",
+                "/aws/lambda/EmailSenderFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El cliente recibió 5 emails de confirmación de compra idénticos para la misma orden"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El cliente recibió 5 emails de confirmación de compra idénticos para la misma orden\n- Cliente confirma y termina el flujo de compra.\n- El sistema recibe la orden de enviar el correo de compra.\n- El sistema debe enviar un solo correo, evitando duplicidades, independiente de la cantidad y causas de reintentos.\nResultado: El cliente recibe un solo correo, tal como se espera."
+                }
+            ]
+        },
+        {
+            "name": "test_012",
+            "source": "git@example.com:org/bw_test_012.git",
+            "general-context": "This project update stock for an item saved on dynamo. source code is on folders @inventory_handler and @template.yml file",
+            "logs": [
+                "/aws/lambda/InventoryFunction-bwtest-012"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El inventario del producto SKU-7821 muestra -3 unidades disponibles (stock negativo)"
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. El inventario del producto SKU-7821 muestra -3 unidades disponibles (stock negativo)\n- El usuario elige un producto.\n- El sistema anota qué versión del stock está viendo el usuario.\n- Al hacer clic en comprar, el sistema verifica: \"¿Sigue habiendo la misma cantidad que cuando este usuario empezó?\".\n- Si alguien más ya compró reduciendo el stock, el sistema detiene la transacción y avisa la nueva cantidad o que ya no hay stock.\nResultado: El inventario se mantiene exacto y se informa la cantidad en “vivo” del stock para cada transacción, evitando ejecutar movimientos que lleven stock a negativo."
+                }
+            ]
+        },
+        {
+            "name": "test_013",
+            "source": "git@example.com:org/bw_test_013.git",
+            "general-context": "This project return what it gets. source code is on folders @app and @template.yml file",
+            "logs": [
+                "/aws/lambda/data-processor-t13"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación funciona bien por un momento, pero luego empieza a dar timeouts aleatorios. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest\n- El endpoint recibe el payload de la llamada y lo responde"
+                }
+            ]
+        },
+        {
+            "name": "test_014",
+            "source": "git@example.com:org/bw_test_014.git",
+            "general-context": "This project updates loyalty points for an user. source code is on folders @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/UpdateLoyaltyPointsFunction",
+                "/aws/lambda/ProcessPurchaseFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación registra de forma erronea los puntos de fidelidad de los usuarios."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación registra de forma erronea los puntos de fidelidad de los usuarios. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest\n- El endpoint recibe informacion de una compra y detalle de puntos ganados para un usuario\n- La aplicacion debe guardar esta informacion en base de datos"
+                }
+            ]
+        },
+        {
+            "name": "test_015",
+            "source": "git@example.com:org/bw_test_015.git",
+            "general-context": "This project manage photos, store them s3 and dynamo. source code is on folders @delete_photo, @list_photos, @upload_photo and @template.yml file",
+            "logs": [
+                "/aws/lambda/dev-UploadPhoto",
+                "/aws/lambda/dev-DeletePhoto",
+                "/aws/lambda/dev-ListPhotos"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil. la aplicación deberia funcionar como sigue:\n- La aplicacion expone endpoints en una api rest para gestionar fotografias de un usuario\n- La aplicacion permite eliminar fotografias por ejemplo la foto de perfil\n- La aplicacion permite subir fotografias para un usuario\n- La aplicacion permite obtener el listado de fotografias de un usuario"
+                }
+            ]
+        },
+        {
+            "name": "test_016",
+            "source": "git@example.com:org/bw_test_016.git",
+            "general-context": "This project do transaction from one account to another. source code is on folders @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/test-016-acc-setup",
+                "/aws/lambda/test-016-transfer-processor"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas. la aplicación deberia funcionar como sigue:\n- La aplicacion expone endpoints en una api rest para realizar transferencias entre cuentas\n- Antes de transferir debe generar un identificador de transaccion\n- Se debe reservar los fondos y llamar a un servicio que valida la integridad de estos\n- Posterior a la validacion se realiza la transferencia y se libera la reserva"
+                }
+            ]
+        },
+        {
+            "name": "test_018",
+            "source": "git@example.com:org/bw_test_018.git",
+            "general-context": "This project manage a workflow for Orders, considering payment, inventory and email notifications. source code is on folders @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/TriggerOrderFunction",
+                "/aws/lambda/ChargePaymentFunction",
+                "/aws/lambda/UpdateInventoryFunction",
+                "/aws/lambda/SendToWarehouseFunction",
+                "/aws/lambda/SendConfirmationEmailFunction",
+                "/aws/lambda/RevertInventoryFunction",
+                "/aws/lambda/RefundPaymentFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación procesa ordenes de compra, pero los clientes no reciben confirmacion ni los productos son enviados a la bodega. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest para procesar una orden de compra\n- Se debe procesar el pago, luego actualizar el inventario, luego enviar el producto a la bodega, y finalmente notificar por correo electronico al usuario"
+                }
+            ]
+        },
+        {
+            "name": "test_019",
+            "source": "git@example.com:org/bw_test_019.git",
+            "general-context": "This project get products items from dynamo table. source code is on folders @product_service and @template.yml file",
+            "logs": [
+                "/aws/lambda/SearchProductsFunction",
+                "/aws/lambda/SeedDataFunction",
+                "/aws/lambda/LoadGeneratorFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest obtener un listado de productos filtrados por categoria\n- Los productos deben estar categorizados en una base de datos"
+                }
+            ]
+        },
+        {
+            "name": "test_020",
+            "source": "git@example.com:org/bw_test_020.git",
+            "general-context": "This project check if a user have an active session on dynamo. source code is on folders @src and @template.yml file",
+            "logs": [
+                "/aws/lambda/UserProfileFunction"
+            ],
+            "tests": [
+                {
+                    "name": "source-only",
+                    "cw-mcp": false,
+                    "context": "identifica la causa raiz de un error en el codigo fuente."
+                },
+                {
+                    "name": "source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos."
+                },
+                {
+                    "name": "detailed-source-and-logs",
+                    "cw-mcp": true,
+                    "context": "revisa errores en los logs e identifica la causa raiz en el codigo fuente. La aplicación valida que un usuario tenga una sesion activa registrada en base de datos. El equipo de ciberseguridad ha reportado que la informacion de la sesion se puede obtener desde sitios sospechosos externos. la aplicación deberia funcionar como sigue:\n- La aplicacion expone un endpoint en una api rest para validar que un usuario tenga una sesion activa\n- Las sesiones activas se validan contra una base de datos\n- La aplicacion utiliza tokens jwt y deben ser validados para utilizar el servicio"
+                }
+            ]
+        }
+    ]
+}

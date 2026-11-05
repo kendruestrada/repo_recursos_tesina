@@ -1,0 +1,32 @@
+Síntoma Reportado:
+"La aplicación está completamente caída"
+
+Flujo del Error:
+1. Lambda EmailService tiene circuit breaker para SES (servicio de email)
+2. SES tiene throttling temporal (504 Gateway Timeout) por 2 minutos
+3. Circuit breaker se abre después de 5 fallos consecutivos
+4. Pero el circuit breaker está configurado para NO servir respuestas degradadas
+5. Lambda EmailService empieza a rechazar TODAS las requests (incluso las que no necesitan email)
+6. Lambda OrderProcessing depende de EmailService, empieza a fallar también
+7. Lambda PaymentConfirmation depende de OrderProcessing, falla también
+8. Toda la aplicación queda inaccesible aunque SES ya se recuperó
+
+Causa Raíz:
+- Circuit breaker mal configurado (all-or-nothing en vez de fail-safe)
+- No hay fallback strategy (debería continuar sin email)
+- Dependencias síncronas crean cascading failure
+- Circuit breaker no se cierra automáticamente (half-open state mal implementado)
+
+Desafío para MCP:
+- Debe identificar el servicio raíz (SES throttling)
+- Debe seguir la cadena de dependencias (EmailService → OrderProcessing → PaymentConfirmation)
+- Debe entender que el circuit breaker está FUNCIONANDO pero mal configurado
+- Debe ver métricas de SES para saber que ya se recuperó
+
+Desafío sin-MCP:
+- Sin contexto de arquitectura y dependencias, imposible rastrear
+
+Preguntas:
+2.- La aplicación está completamente caída
+3.- La aplicación está completamente caída, los siguientes servicios responden con error:
+OrderProcessing, PaymentConfirmation, EmailService

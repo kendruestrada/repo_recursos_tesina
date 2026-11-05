@@ -1,0 +1,65 @@
+Síntoma Reportado:
+"Al eliminar mi foto de perfil, todas las fotos de mi galería (150 fotos) fueron eliminadas también"
+
+Flujo del Error:
+1. Usuario tiene:
+   - 1 foto de perfil en S3: s3://bucket/users/user_123/profile.jpg
+   - 150 fotos en galería en S3: s3://bucket/users/user_123/gallery/*
+   - Metadata en DynamoDB tabla "Photos"
+2. Usuario hace clic en "Eliminar foto de perfil"
+3. Lambda DeletePhoto recibe: { "photo_id": "profile_12345" }
+4. Lambda consulta DynamoDB para obtener metadata de la foto:
+```json
+   {
+     "photo_id": "profile_12345",
+     "user_id": "user_123",
+     "s3_key": "users/user_123/profile.jpg",
+     "type": "profile"
+   }
+```
+5. Lambda extrae el "prefix" para eliminar de S3:
+```python
+   # BUG: Extrae "users/user_123/" en vez de "users/user_123/profile.jpg"
+   s3_prefix = s3_key.rsplit('/', 1)[0] + '/'  # "users/user_123/"
+   
+   # Elimina TODO bajo ese prefix
+   s3.delete_objects(
+       Bucket='bucket',
+       Delete={'Objects': [{'Key': obj['Key']} 
+                          for obj in s3.list_objects(Prefix=s3_prefix)['Contents']]}
+   )
+```
+6. S3 elimina TODAS las fotos del usuario (profile + gallery)
+7. Lambda elimina metadata de DynamoDB solo de la foto de perfil
+8. Estado inconsistente:
+   - S3: 0 fotos (todo eliminado)
+   - DynamoDB: metadata de 150 fotos de galería todavía existe (pero archivos no existen)
+
+Causa Raíz:
+- Código extrae prefix incorrectamente (uno más arriba de lo debido)
+- No hay validación de cuántos objetos se eliminarán antes de ejecutar
+- No hay confirmación del usuario para eliminación masiva
+- No hay soft-delete o papelera de reciclaje
+- Lambda tiene permisos de s3:DeleteObject sin restricción de scope
+
+Desafío para MCP:
+- Debe buscar logs de Lambda DeletePhoto (ver list_objects y delete_objects)
+- Debe ver cuántos objetos se eliminaron (debería ser 1, pero fueron 151)
+- Debe buscar el código para ver el bug en rsplit
+- Debe buscar S3 access logs (ver que se eliminaron múltiples keys)
+- Debe verificar metadata en DynamoDB (ver inconsistencia)
+- Debe buscar permisos IAM (ver que permite delete sin restricción)
+
+Desafío sin-MCP:
+- El síntoma indica el resultado pero no la causa
+- ¿Qué logs pasar? Sin ver list_objects, no es obvio que se listaron 151 archivos
+- Necesitaría logs de Lambda + S3 access logs + código
+- Sin ver el prefix usado, imposible identificar el bug
+
+Preguntas:
+2.- La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil.
+3.- La aplicación no muestra todas las fotos registradas despues de eliminar mi foto de perfil. la aplicación deberia funcionar como sigue:
+- La aplicacion expone endpoints en una api rest para gestionar fotografias de un usuario
+- La aplicacion permite eliminar fotografias por ejemplo la foto de perfil
+- La aplicacion permite subir fotografias para un usuario
+- La aplicacion permite obtener el listado de fotografias de un usuario

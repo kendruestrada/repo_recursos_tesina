@@ -1,0 +1,43 @@
+Síntoma Reportado:
+"Cada 5 minutos exactos, la API se pone extremadamente lenta (>10 segundos de respuesta) y luego vuelve a la normalidad"
+
+Flujo del Error:
+1. Sistema usa ElastiCache Redis para cachear resultados de queries costosas a RDS
+2. Cache tiene TTL de 300 segundos (5 minutos) para todas las keys
+3. A las 10:00:00, se cachean 1000 productos populares simultáneamente (después de un deploy)
+4. Todas las 1000 keys tienen el MISMO TTL: expiran a las 10:05:00
+5. A las 10:05:00:
+   - Todas las 1000 keys expiran simultáneamente
+   - 50 requests concurrentes intentan acceder a productos (cache miss)
+   - Los 50 requests inician queries a RDS al mismo tiempo
+6. Lambda ProductAPI (50 instancias concurrentes):
+   - Hacen SELECT costoso a RDS (join de 5 tablas)
+   - RDS se sobrecarga con 50 queries idénticas simultáneas
+   - Cada query tarda 12 segundos en vez de 200ms normal
+7. Mientras tanto, MÁS requests llegan y también encuentran cache miss
+8. Efecto cascada: 200+ Lambdas hacen query a RDS
+9. RDS alcanza max_connections, nuevas conexiones son rechazadas
+10. Algunos Lambdas fallan con "Too many connections"
+11. Después de ~30 segundos, los primeros queries terminan y re-cachean los datos
+12. Sistema vuelve a la normalidad hasta que el cache expire nuevamente en 5 minutos
+
+Causa Raíz:
+- Cache stampede (thundering herd) por TTL sincronizado
+- No hay cache warming estratégico
+- No hay request coalescing (múltiples requests para mismo dato no se deduplicান)
+- No hay circuit breaker para RDS cuando está sobrecargado
+- TTL fijo sin jitter (randomización)
+
+Desafío para MCP:
+- Debe buscar métricas de ElastiCache (cache hit ratio caída brusca cada 5 min)
+- Debe buscar métricas de RDS (CPU spike, connections spike cada 5 min)
+- Debe correlacionar el patrón temporal (cada 300 segundos exactos)
+- Debe buscar logs de Lambda (múltiples instancias con queries lentas al mismo tiempo)
+- Debe identificar que el problema es periódico (no random)
+- Debe entender el concepto de cache stampede
+
+Desafío sin-MCP:
+- El síntoma indica periodicidad pero no la causa
+- ¿Qué logs pasar sin saber que es un problema de caché?
+- Necesitaría métricas de múltiples servicios (ElastiCache + RDS + Lambda)
+- Sin ver la correlación temporal, parece carga inusual random

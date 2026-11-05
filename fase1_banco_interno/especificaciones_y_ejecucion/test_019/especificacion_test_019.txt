@@ -1,0 +1,57 @@
+Síntoma Reportado:
+"Las búsquedas de productos con categoría 'Electrónicos' son muy lentas (5-10 segundos) mientras que otras categorías responden en <500ms"
+
+Flujo del Error:
+1. DynamoDB tabla "Products" tiene:
+   - Partition key: category_id
+   - Distribución de datos:
+     - category_id="electronics": 500,000 items (50% del total)
+     - category_id="books": 200,000 items (20%)
+     - category_id="clothing": 150,000 items (15%)
+     - Otras 20 categorías: 150,000 items combinados (15%)
+2. Lambda SearchProducts recibe query: { "category": "electronics", "page": 1 }
+3. Lambda hace Query a DynamoDB:
+```python
+   response = table.query(
+       KeyConditionExpression=Key('category_id').eq('electronics'),
+       Limit=20
+   )
+```
+4. Esta query va a UNA SOLA partición física de DynamoDB (la que contiene "electronics")
+5. Esa partición está "caliente" porque:
+   - Contiene 500,000 items (50% de los datos)
+   - Recibe 70% del tráfico de queries (categoría más popular)
+   - Throttling de read capacity: partición tiene 3000 RCU pero necesita 8000 RCU
+6. DynamoDB retorna ProvisionedThroughputExceededException
+7. SDK hace retry automático con exponential backoff
+8. Después de 3 retries, query tarda 8 segundos total
+9. Lambda retorna datos pero con latencia alta
+
+Causa Raíz:
+- Diseño de partition key subóptimo (category_id tiene distribución muy desbalanceada)
+- Data skew: 50% de datos en una sola partición
+- Access pattern skew: 70% de queries van a la misma partición
+- Provisioned capacity se distribuye uniformemente entre particiones (no por uso)
+- No hay índice secundario con mejor distribución
+- No hay sharding manual de la categoría "electronics"
+
+Desafío para MCP:
+- Debe buscar logs de SearchProducts (ver ProvisionedThroughputExceededException)
+- Debe buscar métricas de DynamoDB (ThrottledRequests por partition key)
+- Debe analizar distribución de datos (count items por category_id)
+- Debe identificar que "electronics" tiene muchos más items que otras categorías
+- Debe correlacionar que throttling solo ocurre con category="electronics"
+- Debe entender conceptos de DynamoDB partitioning y hot partitions
+- Debe buscar patrones de acceso (queries por category_id)
+
+Desafío sin-MCP:
+- El síntoma indica lentitud pero no throttling
+- ¿Cómo saber que es un problema de partición sin ver métricas de DynamoDB?
+- Necesitaría logs + métricas de DynamoDB + análisis de distribución de datos
+- Sin entender DynamoDB internals, imposible diagnosticar hot partition
+
+Preguntas:
+2.- La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta.
+3.- La aplicación realiza busqueda de productos por categorias, para algunas categorias especificas la busqueda es muy lenta. la aplicación deberia funcionar como sigue:
+- La aplicacion expone un endpoint en una api rest obtener un listado de productos filtrados por categoria
+- Los productos deben estar categorizados en una base de datos

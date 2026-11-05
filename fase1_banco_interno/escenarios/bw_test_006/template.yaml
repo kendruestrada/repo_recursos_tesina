@@ -1,0 +1,408 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: "Precios de productos"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name for resource naming
+
+  ProcessorApiUrl:
+    Type: String
+    Description: URL for the external processor API
+
+Globals:
+  Function:
+    Timeout: 20
+    MemorySize: 256
+    Runtime: python3.12
+    Tracing: Active
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        POWERTOOLS_SERVICE_NAME: price-system
+        POWERTOOLS_LOG_LEVEL: INFO
+
+Resources:
+  # ============================================================================
+  # DynamoDB Table: Products (Source of Truth)
+  # ============================================================================
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-products"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: productId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: productId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # ElastiCache: Redis Cluster
+  # ============================================================================
+  PricesCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: Subnet group for price cache
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  PricesCacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ElastiCache
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  PricesCache:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      CacheNodeType: cache.t3.micro
+      Engine: redis
+      NumCacheNodes: 1
+      VpcSecurityGroupIds:
+        - !Ref PricesCacheSecurityGroup
+      CacheSubnetGroupName: !Ref PricesCacheSubnetGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # VPC & Networking (para ElastiCache)
+  # ============================================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+
+  # ============================================================================
+  # VPC Endpoints (para que Lambdas en VPC accedan a servicios AWS)
+  # ============================================================================
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      VpcId: !Ref VPC
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  # ============================================================================
+  # Lambda: ProductPricingFunction
+  # ============================================================================
+  ProductPricingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-ProductPricingFunction"
+      CodeUri: product_pricing/
+      Handler: app.lambda_handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProductsTable
+          REDIS_ENDPOINT: !GetAtt PricesCache.RedisEndpoint.Address
+          REDIS_PORT: !GetAtt PricesCache.RedisEndpoint.Port
+          CACHE_TTL_SECONDS: "3600"
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
+      Events:
+        GetProductPrice:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PricingApi
+            Path: /product/{productId}/price
+            Method: get
+
+  # ============================================================================
+  # Lambda: InventoryCheckFunction (NO usa Cache - Siempre lee DB)
+  # ============================================================================
+  InventoryCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-InventoryCheckFunction"
+      CodeUri: inventory_check/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProductsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
+
+  # ============================================================================
+  # Lambda: CheckoutFunction (Valida precio - Detecta mismatch)
+  # ============================================================================
+  CheckoutFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-CheckoutFunction"
+      CodeUri: checkout/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          INVENTORY_FUNCTION_NAME: !Ref InventoryCheckFunction
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref InventoryCheckFunction
+      Events:
+        CheckoutEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PricingApi
+            Path: /checkout
+            Method: post
+
+  # ============================================================================
+  # Lambda: UpdatePriceFunction (Admin - Actualiza DB, NO invalida cache inmediatamente)
+  # ============================================================================
+  UpdatePriceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-UpdatePriceFunction"
+      CodeUri: update_price/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ProductsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ProductsTable
+      Events:
+        UpdatePriceEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PricingApi
+            Path: /admin/product/{productId}/price
+            Method: put
+
+  # ============================================================================
+  # Lambda: CacheInvalidationFunction (Triggered by DynamoDB Stream)
+  # ============================================================================
+  CacheInvalidationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-CacheInvalidationFunction"
+      CodeUri: cache_invalidation/
+      Handler: app.lambda_handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          REDIS_ENDPOINT: !GetAtt PricesCache.RedisEndpoint.Address
+          REDIS_PORT: !GetAtt PricesCache.RedisEndpoint.Port
+          PROCESSOR_API_URL: !Ref ProcessorApiUrl
+
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+      Events:
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt ProductsTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 10
+
+  # ============================================================================
+  # API Gateway
+  # ============================================================================
+  PricingApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${Environment}-pricing-api"
+      StageName: !Ref Environment
+      TracingEnabled: true
+
+  # ============================================================================
+  # CloudWatch Log Groups
+  # ============================================================================
+  ProductPricingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-ProductPricingFunction"
+      RetentionInDays: 14
+
+  InventoryCheckLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-InventoryCheckFunction"
+      RetentionInDays: 14
+
+  CheckoutLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-CheckoutFunction"
+      RetentionInDays: 14
+
+  UpdatePriceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-UpdatePriceFunction"
+      RetentionInDays: 14
+
+  CacheInvalidationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-CacheInvalidationFunction"
+      RetentionInDays: 14
+
+Outputs:
+  PricingApiEndpoint:
+    Description: API Gateway endpoint for pricing system
+    Value: !Sub "https://${PricingApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  ProductsTableName:
+    Description: DynamoDB Products table name
+    Value: !Ref ProductsTable
+
+  RedisCacheEndpoint:
+    Description: ElastiCache Redis endpoint
+    Value: !GetAtt PricesCache.RedisEndpoint.Address
+
+  ProductPricingFunctionArn:
+    Description: ProductPricing Lambda ARN
+    Value: !GetAtt ProductPricingFunction.Arn
+
+  InventoryCheckFunctionArn:
+    Description: InventoryCheck Lambda ARN
+    Value: !GetAtt InventoryCheckFunction.Arn
+
+  CheckoutFunctionArn:
+    Description: Checkout Lambda ARN
+    Value: !GetAtt CheckoutFunction.Arn
+
+  UpdatePriceFunctionArn:
+    Description: UpdatePrice Lambda ARN
+    Value: !GetAtt UpdatePriceFunction.Arn
+
+  CacheInvalidationFunctionArn:
+    Description: CacheInvalidation Lambda ARN
+    Value: !GetAtt CacheInvalidationFunction.Arn

@@ -1,0 +1,162 @@
+## Análisis del Ticket de Soporte Técnico
+
+**Ticket:** La aplicación funciona correctamente inicialmente, pero después de un tiempo comienza a experimentar timeouts aleatorios que afectan el rendimiento del sistema.
+
+## Hallazgos en los logs
+
+Tras analizar los logs de CloudWatch, se identificaron patrones críticos:
+
+### 1. **Patrón de Timeouts Sistemáticos**
+- **Frecuencia:** Aproximadamente cada 4ta invocación termina en timeout de 30 segundos
+- **Ejemplos específicos:**
+  ```
+  RequestId: df1daf07-a41b-421f-bf81-90c370a28577 - Duration: 30000.00 ms - Status: timeout
+  RequestId: 232110ba-5ec9-4de2-9844-908b4e6da225 - Duration: 30000.00 ms - Status: timeout
+  RequestId: 9a0d634c-666d-449e-a499-5c049049ee27 - Duration: 30000.00 ms - Status: timeout
+  ```
+
+### 2. **Invocaciones Exitosas Intercaladas**
+- Las invocaciones exitosas tienen duraciones normales (1-3 ms)
+- Patrón típico: 3 invocaciones exitosas → 1 timeout → repetición del ciclo
+
+### 3. **Inicializaciones de Runtime**
+- Se observan múltiples `INIT_START` indicando creación de nuevos contenedores Lambda
+- Esto sugiere que los contenedores están siendo reciclados frecuentemente
+
+## Relación con el código fuente
+
+### **Problema Principal: Fuga de Conexiones en el Pool**
+
+En el archivo `app/app.py`, líneas 21-44, se identifica el problema crítico:
+
+```python
+def lambda_handler(event, context):
+    # ...
+    conn = connection_pool.getconn()  # ← Se obtiene conexión
+    
+    try:
+        # ... procesamiento exitoso
+        return {
+            "statusCode": 200,
+            "body": json.dumps(result)
+        }
+        # ← PROBLEMA: No se libera la conexión en caso exitoso
+        
+    except Exception as e:
+        logger.error(f"Execution error: {str(e)}")
+        connection_pool.putconn(conn)  # ← Solo se libera en caso de error
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal Processing Error"})
+        }
+```
+
+### **Análisis del Pool de Conexiones**
+
+En `app/db/database.py`:
+```python
+class SimpleConnectionPool:
+    def __init__(self, minconn, maxconn, database=None):
+        self.maxconn = maxconn  # Configurado en 5 conexiones máximas
+        self._semaphore = threading.Semaphore(maxconn)
+```
+
+## Ejemplo de ejecución
+
+**Simulación del problema:**
+
+1. **Invocación 1-3:** Exitosas
+   - `getconn()` → semáforo: 4, 3, 2 conexiones disponibles
+   - Conexiones NO liberadas → semáforo permanece en 2
+
+2. **Invocación 4-5:** 
+   - `getconn()` → semáforo: 1, 0 conexiones disponibles
+   - Conexiones NO liberadas
+
+3. **Invocación 6:** 
+   - `getconn()` → **BLOQUEO** - semáforo en 0, espera infinita
+   - Lambda timeout después de 30 segundos
+   - Container reciclado → pool reiniciado
+
+4. **Invocación 7:** Nuevo container, ciclo se repite
+
+## Soluciones propuestas
+
+### **Solución 1: Implementar finally block (Recomendada)**
+
+```python
+def lambda_handler(event, context):
+    request_id = getattr(context, 'aws_request_id', 'local-id')
+    logger.info(f"START - Node:{CID} - Request:{request_id}")
+    
+    conn = connection_pool.getconn()
+    
+    try:
+        body_raw = event.get("body") if event else "{}"
+        if isinstance(body_raw, str):
+            body = json.loads(body_raw)
+        else:
+            body = body_raw
+            
+        result = {
+            "status": "success",
+            "data": {
+                "id": body.get("id", "0"),
+                "node_ref": CID
+            }
+        }
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps(result)
+        }
+        
+    except Exception as e:
+        logger.error(f"Execution error: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal Processing Error"})
+        }
+    finally:
+        # CRÍTICO: Siempre liberar la conexión
+        connection_pool.putconn(conn)
+```
+
+### **Solución 2: Context Manager**
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_connection():
+    conn = connection_pool.getconn()
+    try:
+        yield conn
+    finally:
+        connection_pool.putconn(conn)
+
+def lambda_handler(event, context):
+    request_id = getattr(context, 'aws_request_id', 'local-id')
+    logger.info(f"START - Node:{CID} - Request:{request_id}")
+    
+    with get_db_connection() as conn:
+        try:
+            # ... resto del código
+```
+
+### **Solución 3: Mejorar el Pool con timeout**
+
+```python
+def getconn(self, timeout=5):
+    if self._semaphore.acquire(timeout=timeout):
+        self._conn_count += 1
+        return {"id": f"db_conn_{id(self)}_{self._conn_count}", "status": "active"}
+    else:
+        raise Exception("Connection pool timeout - no connections available")
+```
+
+## Recomendación Final
+
+**Implementar la Solución 1** es la más directa y efectiva. El problema raíz es la fuga de conexiones en el pool debido a la falta de liberación en el flujo exitoso. Esta es una causa común de degradación progresiva en aplicaciones que usan pools de recursos.
+
+La implementación del `finally` block garantiza que las conexiones siempre se liberen, independientemente del resultado de la ejecución, eliminando los timeouts aleatorios observados en los logs.

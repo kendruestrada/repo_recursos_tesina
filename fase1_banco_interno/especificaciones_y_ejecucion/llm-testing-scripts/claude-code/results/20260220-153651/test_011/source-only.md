@@ -1,0 +1,91 @@
+## Error en Inicializacion de Variables: `UnboundLocalError` en `process_order`
+
+### Summary: Las variables `customer_email` y `amount` no se inicializan antes de usarse, causando un `UnboundLocalError` si faltan en el request body.
+
+### Severity: High
+
+---
+
+### Root Cause Analysis
+
+**Ubicacion:** `process_order/app.py`, lineas 18-28
+
+**Flujo del problema:**
+
+En `process_order/app.py`, las tres variables del payload se asignan de forma condicional:
+
+```python
+# order_id: tiene valor por defecto ANTES del condicional
+order_id = str(uuid.uuid4())     # <-- inicializado siempre (linea 11)
+if "order_id" in body:
+    order_id = body["order_id"]
+
+# customer_email y amount: NO tienen valor por defecto
+if "customer_email" in body:
+    customer_email = body["customer_email"]   # <-- solo asignado si existe
+
+if "amount" in body:
+    amount = body["amount"]                   # <-- solo asignado si existe
+
+message_body = {
+    "order_id": order_id,
+    "customer_email": customer_email,   # UnboundLocalError si la clave faltó
+    "amount": amount,                   # UnboundLocalError si la clave faltó
+}
+```
+
+`order_id` esta protegido porque se inicializa con `uuid4()` en la linea 11 antes del bloque condicional. `customer_email` y `amount` **no tienen valor por defecto**. Si el cuerpo del request llega sin alguno de esos campos, Python lanza:
+
+```
+UnboundLocalError: local variable 'customer_email' referenced before assignment
+UnboundLocalError: local variable 'amount' referenced before assignment
+```
+
+**Steps to reproduce:**
+1. Enviar un `POST /report` con un body que omita `customer_email` o `amount`.
+2. Ejemplo: `{"order_id": "123"}` -> la Lambda falla en la construccion de `message_body`.
+
+**Expected vs Actual:**
+
+| Expected | Actual |
+|---|---|
+| Validacion de campos requeridos o valor por defecto | `UnboundLocalError` en tiempo de ejecucion al construir `message_body` |
+
+---
+
+### Solution
+
+Inicializar `customer_email` y `amount` con un valor por defecto antes del bloque condicional, siguiendo el mismo patron que ya usa `order_id`:
+
+```python
+# process_order/app.py - lineas 18-22
+customer_email = None   # valor por defecto
+if "customer_email" in body:
+    customer_email = body["customer_email"]
+
+amount = None           # valor por defecto
+if "amount" in body:
+    amount = body["amount"]
+```
+
+O bien, validar la presencia de los campos requeridos y retornar un error `400` si faltan, dado que el sistema no puede procesar una orden sin email ni monto:
+
+```python
+if "customer_email" not in body or "amount" not in body:
+    return {
+        "statusCode": 400,
+        "body": json.dumps({"error": "Faltan campos requeridos: customer_email, amount"})
+    }
+customer_email = body["customer_email"]
+amount = body["amount"]
+```
+
+Esta segunda opcion es la mas adecuada ya que `customer_email` y `amount` son datos obligatorios para que `email_sender` pueda procesar el mensaje de SQS (`email_sender/app.py`, lineas 12-13).
+
+# Total cost USD
+
+0.27145375000000005
+
+# Execution time in seconds: 
+
+56

@@ -1,0 +1,111 @@
+## Bug Report: Transferencia de Fondos - Errores en Flujo de Control y Bloqueo de Recursos
+
+### Summary: El resultado de `verify_settlement_window` es ignorado y `reserve_resource` contiene un bucle infinito sin timeout.
+
+### Severity: Critical
+
+---
+
+### Root Cause Analysis
+
+**Bug 1 — Resultado de verificacion ignorado**
+
+- **Archivo:** `src/transfer_funds.py:31`
+- **Funcion:** `handler`
+
+El retorno de `verify_settlement_window(source)` **nunca se evalua**. La funcion retorna `True` o `False`, pero el codigo continua la ejecucion independientemente del resultado. Esto significa que la transaccion avanza incluso cuando la verificacion falla (endpoint no disponible, timeout, error de red).
+
+```python
+# Linea 31 — el valor de retorno se descarta
+verify_settlement_window(source)  # BUG: resultado ignorado
+
+# Deberia ser:
+if not verify_settlement_window(source):
+    raise Exception("Settlement window check failed")
+```
+
+**Flujo esperado vs real:**
+
+| Condicion | Esperado | Real |
+|---|---|---|
+| `verify_settlement_window` retorna `False` | Abortar transaccion | Continua normalmente |
+| Endpoint no disponible | Abortar transaccion | Continua normalmente |
+
+---
+
+**Bug 2 — Bucle infinito sin timeout en `reserve_resource`**
+
+- **Archivo:** `src/resource_registry.py:13`
+- **Funcion:** `reserve_resource`
+
+El bucle `while True` reintenta indefinidamente si `ConditionalCheckFailedException` se lanza (recurso ya reservado por otra transaccion). No existe limite de reintentos ni timeout de salida.
+
+```python
+while True:   # BUG: sin condicion de salida ni timeout
+    try:
+        table.put_item(...)
+        return True
+    except ...:
+        time.sleep(0.1)
+        # nunca sale si el recurso queda bloqueado permanentemente
+```
+
+El campo `ttl` en DynamoDB **no mitiga esto**: la eliminacion por TTL puede tardar hasta 48 horas, por lo que un recurso huerfano (transaccion que crasheo antes de liberar) puede bloquear el bucle hasta que el Lambda exceda su timeout propio.
+
+**Escenario de deadlock:**
+1. Transaccion A reserva `res:source` y crashea antes de liberar.
+2. Transaccion B llama `reserve_resource("res:source", ...)`.
+3. El bucle en B gira indefinidamente hasta timeout del Lambda.
+
+---
+
+### Steps to Reproduce
+
+1. Enviar dos requests simultaneos con el mismo `from_account`.
+2. Observar que uno de los handlers entra en bucle infinito.
+3. Enviar un request con el endpoint `INTERNAL_PROC_ENDPOINT` caido.
+4. Observar que la transaccion se completa igualmente (sin validacion del settlement window).
+
+---
+
+### Solution
+
+**Fix 1 — Evaluar el resultado de `verify_settlement_window` (`transfer_funds.py:31`):**
+
+```python
+if not verify_settlement_window(source):
+    raise Exception("Settlement window verification failed")
+```
+
+**Fix 2 — Agregar limite de reintentos en `reserve_resource` (`resource_registry.py:13`):**
+
+```python
+MAX_WAIT_SECONDS = 10
+start = time.time()
+
+while True:
+    if time.time() - start > MAX_WAIT_SECONDS:
+        raise TimeoutError(f"Resource {resource_key} locked, timeout exceeded")
+    try:
+        table.put_item(...)
+        return True
+    except ...:
+        time.sleep(0.1)
+```
+
+---
+
+**Resumen de ubicaciones afectadas:**
+
+| Archivo | Linea | Descripcion |
+|---|---|---|
+| `src/transfer_funds.py` | 31 | Resultado de `verify_settlement_window` ignorado |
+| `src/resource_registry.py` | 13 | Bucle `while True` sin limite de tiempo ni reintentos |
+
+# Total cost USD
+
+0.11641
+
+# Execution time in seconds: 
+
+37

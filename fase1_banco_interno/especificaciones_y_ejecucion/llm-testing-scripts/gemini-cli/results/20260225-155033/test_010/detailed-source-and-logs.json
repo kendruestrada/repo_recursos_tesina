@@ -1,0 +1,90 @@
+{
+  "session_id": "1bc6f912-9dd3-4b6d-b6b6-90b8e4b2fb35",
+  "response": "## [Titulo]: Codificacion incorrecta de caracteres en correos electronicos\n### Resumen: Los correos de bienvenida se envian utilizando la codificacion ISO-8859-1, lo que impide renderizar correctamente tildes y caracteres especiales en los nombres.\n### Severidad: Medium\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Registrar un usuario a traves del formulario web ingresando un nombre con tildes (por ejemplo, \"José\").\n  2. La API Gateway procesa la peticion y la funcion Lambda `UserRegistrationFunction` guarda exitosamente los datos (incluyendo las tildes) en la tabla DynamoDB.\n  3. DynamoDB dispara el evento hacia la funcion Lambda `SendEmailServiceFunction`.\n  4. La funcion de correo construye el comando para AWS SES asignando a la propiedad `Charset` el valor de la variable de entorno `EMAIL_CHARSET` (configurada como `ISO-8859-1` via AWS SSM).\n  5. El cliente de correo recibe el mensaje, pero por la incompatibilidad de la codificacion ISO-8859-1 con caracteres especiales de formato UTF-8, el nombre se rompe o se trunca mostrando solo \"Jos\".\n- Esperado vs. Actual:\n  - Esperado: El cliente de correo muestra correctamente \"Hola José García,\" al reconocer los caracteres especiales.\n  - Actual: El cliente de correo falla al procesar la codificacion y muestra \"Hola Jos\" u omite el resto del texto tras el caracter especial.\n- Ubicacion del error (file/function):\n  - `src/handlers/email.ts` en la funcion `handler` (lineas donde se usa la variable `EMAIL_CHARSET`).\n  - `template.yaml` (donde se inyecta la variable de entorno `EMAIL_CHARSET: '{{resolve:ssm:/bw-010/email/charset}}'`).\n- Logs relevantes:\n  - En CloudWatch (`/aws/lambda/SendEmailServiceFunction`), se registra el payload enviado a SES mostrando el uso de ISO-8859-1 en los atributos Charset:\n  `{\"event\":\"DispatchingEmailToSES\",...,\"ses_payload\":{...\"Message\":{\"Subject\":{\"Data\":\"Welcome to our Service\",\"Charset\":\"ISO-8859-1\"},\"Body\":{\"Text\":{\"Data\":\"\\n        Hello Jos\\u00e9 Garc\\u00eda,\\n...\",\"Charset\":\"ISO-8859-1\"}}}}}`\n### Propuesta de Solucion\n1. Actualizar el parametro en AWS Systems Manager (SSM) `/bw-010/email/charset` para que su valor sea `UTF-8` en vez de `ISO-8859-1`.\n2. Alternativamente, actualizar el fichero `src/handlers/email.ts` para forzar la propiedad `Charset` a `\"UTF-8\"` (harcodeado) de forma que se garantice soporte universal para cualquier alfabeto y se eviten dependencias externas de configuracion que causen truncamientos en los clientes de correo.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 7,
+          "totalErrors": 0,
+          "totalLatencyMs": 146205
+        },
+        "tokens": {
+          "input": 96468,
+          "prompt": 472167,
+          "candidates": 989,
+          "total": 480766,
+          "cached": 375699,
+          "thoughts": 7610,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 6,
+      "totalSuccess": 6,
+      "totalFail": 0,
+      "totalDurationMs": 7847,
+      "totalDecisions": {
+        "accept": 6,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3611,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 8,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "search_logs": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 4122,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 106,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

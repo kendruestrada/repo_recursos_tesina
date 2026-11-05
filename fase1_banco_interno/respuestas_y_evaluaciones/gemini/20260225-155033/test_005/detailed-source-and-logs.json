@@ -1,0 +1,78 @@
+{
+  "session_id": "2afa9dc3-62aa-4e69-98d7-aa87ed79673e",
+  "response": "## [Titulo]: Múltiples solicitudes de crédito bloqueadas en estado \"pending\" debido a falta de actualización de base de datos y timeouts de ejecución\n### Resumen: Las solicitudes quedan en \"pending\" porque RiskAnalysis experimenta un timeout al hacer una llamada HTTP externa sin límite de espera, y porque CreditEvaluation omite la lógica de actualización en DynamoDB posterior a una evaluación.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Enviar una petición inicial para el inicio del flujo con el payload `{\"credit_id\": \"123\"}`.\n  2. `CreditEvaluation` inserta la solicitud en la tabla DynamoDB con el valor \"pending\" en la columna status.\n  3. `CreditEvaluation` invoca sincrónicamente (\"RequestResponse\") a la Lambda `RiskAnalysis`.\n  4. `RiskAnalysis` obtiene el registro e invoca un servicio externo empleando `requests.get(PROCESSOR_URL)` sin establecer un parámetro de timeout.\n  5. Si el servicio externo tiene demoras severas o no responde, la ejecución se bloquea de forma indefinida hasta que AWS interrumpe de forma abrupta a ambas Lambdas tras agotar el límite de ejecución (10 segundos), dejando permanentemente la solicitud como \"pending\".\n  6. Si por el contrario el servicio externo responde en tiempo, la Lambda `CreditEvaluation` carece de cualquier bloque de código posterior que invoque a DynamoDB para cambiar el estado \"pending\" a un estado de evaluación final tras obtener un 200 OK.\n- Esperado vs. Actual:\n  - Ejecución hipotética (Entrada): Envío del payload `{\"credit_id\": \"999\"}`.\n  - Ejecución hipotética (Salida esperada): El servicio externo de evaluación responde un JSON en 2 segundos. `CreditEvaluation` toma dicho resultado positivo y actualiza mediante `update_item` el estado de la solicitud \"999\" en DynamoDB pasando de \"pending\" a \"processed\". Retorna 200.\n  - Ejecución hipotética (Salida actual): La llamada a requests de RiskAnalysis se queda atascada sin reaccionar. A los 10 segundos exactos el sistema fuerza un error de timeout. Incluso en escenarios de respuestas rápidas con status code 200, el flujo retorna omitiendo por completo actualizar el valor en la base de datos, lo que hace que todas las solicitudes permanezcan eternamente \"en proceso\".\n- Ubicacion del error (file/function):\n  - Fichero `src/risk/app.py` en la función `lambda_handler` (línea `processor_response = requests.get(PROCESSOR_URL)`).\n  - Fichero `src/credit/app.py` en la función `lambda_handler` (faltan sentencias para el escenario donde `status_code == 200`).\n- Logs relevantes:\n  - `Invocando endpoint processor` (Última línea reportada en la lambda de análisis previo al cuelgue).\n  - `REPORT RequestId: ... Duration: 10000.00 ms ... Status: timeout` (Evento observable al mismo tiempo en ambos grupos de logs `/aws/lambda/test-005-RiskAnalysis` y `/aws/lambda/test-005-CreditEvaluation`).\n\n### Propuesta de Solucion\n1. En el archivo `src/risk/app.py` se debe especificar un tiempo límite al llamar la librería de requests para que aborte la conexión antes del timeout de la lambda. Ejemplo: `requests.get(PROCESSOR_URL, timeout=4)`. Y controlar la excepción que lanza para emitir un status 504 o 503 correctamente manejado.\n2. En el archivo `src/credit/app.py` se debe incorporar la lógica pertinente en el paso de flujo feliz para ejecutar un `table.update_item(...)` contra la tabla de DynamoDB, cambiando la columna status de \"pending\" al estado devuelto tras procesarse el crédito.\n3. Se recomienda revisar el diseño de la arquitectura para reemplazar la invocación RequestResponse por llamadas asíncronas con uso de Amazon SQS o EventBridge. Al encadenar funciones Lambda de forma sincrónica se duplican los tiempos cobrados, provocando caídas en cascada donde el tiempo de una se consume íntegramente de la otra.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 4,
+          "totalErrors": 0,
+          "totalLatencyMs": 96943
+        },
+        "tokens": {
+          "input": 41696,
+          "prompt": 131264,
+          "candidates": 1077,
+          "total": 137820,
+          "cached": 89568,
+          "thoughts": 5479,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 3,
+      "totalSuccess": 3,
+      "totalFail": 0,
+      "totalDurationMs": 4416,
+      "totalDecisions": {
+        "accept": 3,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 4323,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 90,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

@@ -1,0 +1,55 @@
+Síntoma Reportado:
+"El contador de puntos del usuario user_12345 saltó de 100 a 200 puntos después de una sola compra que debía dar 50 puntos"
+
+Flujo del Error:
+1. Usuario completa compra de $500
+2. Lambda ProcessPurchase emite evento a EventBridge:
+```json
+   {
+     "detail-type": "PurchaseCompleted",
+     "detail": {
+       "user_id": "user_12345",
+       "amount": 500,
+       "points_earned": 50
+     }
+   }
+```
+3. EventBridge tiene regla que triggerea Lambda UpdateLoyaltyPoints
+4. Por un glitch temporal de red, EventBridge envía el evento 2 veces (at-least-once delivery)
+5. Lambda UpdateLoyaltyPoints (invocación 1):
+   - Lee puntos actuales: 100
+   - Suma: 100 + 50 = 150
+   - Escribe: 150 puntos (timestamp T0)
+6. Lambda UpdateLoyaltyPoints (invocación 2 - evento duplicado):
+   - Lee puntos actuales: 150 (ya actualizado por invocación 1)
+   - Suma: 150 + 50 = 200
+   - Escribe: 200 puntos (timestamp T0 + 200ms)
+7. Usuario termina con 200 puntos en vez de 150
+
+Causa Raíz:
+- Lambda UpdateLoyaltyPoints no es idempotente
+- No guarda event_id procesados para deduplicar
+- EventBridge no garantiza exactly-once delivery (solo at-least-once)
+- No hay transaction_id o idempotency_token en los eventos
+- La lógica de suma es stateless (no verifica si ya procesó este evento)
+
+Desafío para MCP:
+- Debe buscar logs de UpdateLoyaltyPoints (dos invocaciones muy cercanas en tiempo)
+- Debe buscar eventos de EventBridge (ver que el mismo evento se entregó 2 veces)
+- Debe correlacionar event_id o detail content (ver que son idénticos)
+- Debe buscar código para ver que no hay deduplicación
+- Debe entender que EventBridge tiene at-least-once semantics
+- Debe verificar historial de puntos del usuario (ver el salto anómalo)
+
+Desafío sin-MCP:
+- El síntoma es "puntos incorrectos" sin indicar duplicación
+- ¿Cómo saber que EventBridge envió duplicado si solo vemos el resultado?
+- Necesitaría logs de EventBridge + invocaciones del Lambda + historial de puntos
+- Sin comparar event_id, imposible confirmar duplicación
+
+Preguntas:
+2.- La aplicación registra de forma erronea los puntos de fidelidad de los usuarios.
+3.- La aplicación registra de forma erronea los puntos de fidelidad de los usuarios. la aplicación deberia funcionar como sigue:
+- La aplicacion expone un endpoint en una api rest
+- El endpoint recibe informacion de una compra y detalle de puntos ganados para un usuario
+- La aplicacion debe guardar esta informacion en base de datos

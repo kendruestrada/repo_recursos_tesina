@@ -1,0 +1,59 @@
+Síntoma Reportado:
+"Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente"
+
+Flujo del Error:
+1. Usuario completa compra, es redirigido a plataforma de pago externa (ej: WebPay)
+2. Usuario ingresa datos de tarjeta en plataforma externa
+3. Plataforma externa procesa pago exitosamente y debita dinero
+4. Plataforma externa redirige al usuario de vuelta a nuestra app mediante callback URL:
+   https://app.com/payment-callback?transaction_id=ABC123&status=success
+5. Frontend recibe callback y hace llamada a Lambda SavePayment con transaction_id
+6. Lambda SavePayment:
+   - Valida transaction_id con plataforma externa (HTTP GET)
+   - Guarda registro de pago en DynamoDB
+   - Actualiza estado del pedido a "paid"
+   - Estos pasos toman ~8 segundos (DynamoDB lento, validaciones múltiples)
+7. MIENTRAS Lambda SavePayment está ejecutando (aún no termina):
+   - Plataforma externa tiene timeout de confirmación de 5 segundos
+   - Al no recibir confirmación HTTP de nuestra app, asume fallo
+   - Plataforma externa ejecuta ROLLBACK automático del pago (política de seguridad)
+8. Lambda SavePayment termina después de 8 segundos y guarda pago como "success" en DynamoDB
+9. Lambda SavePayment intenta confirmar pago con plataforma externa (HTTP POST):
+   POST /api/confirm-payment con transaction_id=ABC123
+10. Plataforma externa retorna 404 "Transaction not found" (ya hizo rollback)
+11. Lambda SavePayment loguea error pero no revierte el registro en DynamoDB
+12. Estado inconsistente:
+    - Nuestra DB: payment_status = "success", order_status = "paid"
+    - Plataforma externa: transaction_status = "rolled_back"
+    - Cuenta del cliente: dinero NO debitado (rollback exitoso)
+
+Causa Raíz:
+- Lambda SavePayment es demasiado lento (8 segundos) para el timeout de la plataforma (5 segundos)
+- No hay confirmación sincrónica inmediata a la plataforma externa
+- Plataforma externa no espera suficiente tiempo antes de hacer rollback
+- No hay compensating transaction cuando la confirmación falla
+- No hay reconciliación periódica entre sistemas
+
+Desafío para MCP:
+- Debe buscar logs de Lambda SavePayment (duración de ejecución)
+- Debe buscar logs de requests HTTP a plataforma externa (404 en confirmación)
+- Debe correlacionar timestamps: callback recibido vs rollback ejecutado
+- Debe buscar métricas de CloudWatch (Duration del Lambda)
+- Debe entender que el problema es de timing, no de lógica
+- Debe identificar que el rollback ocurrió DURANTE la ejecución del Lambda
+- Idealmente debería buscar logs de la plataforma externa (si están disponibles)
+
+Desafío sin-MCP:
+- ¿Qué logs pasar? El síntoma no indica que es un problema de timing
+- Necesitaría logs de AMBOS sistemas + timestamps precisos
+- Necesitaría saber que la plataforma externa tiene timeout de 5s
+- Sin correlación temporal, el error parece aleatorio (intermitente)
+- El "error" solo ocurre cuando SavePayment tarda >5 segundos (bajo carga)
+
+Preguntas:
+2.- Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente
+3.- Algunos pagos aparecen como 'exitosos' en nuestro sistema pero el dinero fue no fue debitado de la cuenta del cliente, el sietema funciona como sigue:
+- cuando el usuario completa la compra es redirigido a una plataforma externa que procesa el pago.
+- esa platafroma externa una vez que el usuario completo el pago redirige a una url nuestra
+- a redirigir a la url , se gatilla el guardado del pago en nuestros sistemas
+- una vez guardado en nuestros sistemas le informamos a la plataforma externa este guardado.

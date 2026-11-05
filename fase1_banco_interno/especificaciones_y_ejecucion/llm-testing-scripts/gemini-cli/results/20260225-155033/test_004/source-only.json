@@ -1,0 +1,54 @@
+{
+  "session_id": "9c2ab4ed-31c8-4068-adfb-ecf171411f94",
+  "response": "## [Titulo]: Falla en manejo de eventos fallidos hacia DLQ y error de tipo en peticiones vacías\n### Resumen: La arquitectura descarta registros fallidos de DynamoDB en lugar de enviarlos a la DLQ, y la API de suscripción falla con código HTTP 500 al recibir peticiones sin cuerpo.\n### Severidad: High\n### Analisis de causa raiz\nEl equipo de expertos analizó la arquitectura y el código detectando las siguientes inconsistencias:\n- Flujo de eventos síncronos: La función Lambda B es invocada de forma síncrona por DynamoDB Streams. Configurar `DeadLetterQueue` a nivel de función en la plantilla SAM solo captura errores de invocaciones asíncronas. Por tanto, cuando Lambda B lanza una excepción intencional para ir a la DLQ, el evento simplemente se reintenta según `MaximumRetryAttempts` y luego se descarta permanentemente.\n- Tipos de datos en API: Cuando API Gateway recibe una petición vacía, el campo `body` en el evento es `null` (None en Python). Usar `event.get(\"body\", \"{}\")` en Lambda A retorna `None`, causando que `json.loads(None)` lance un `TypeError` y rompa el flujo esperado.\n- Conexiones bloqueantes: La llamada externa a `requests.get` en Lambda B carece de un límite de tiempo (timeout), lo que puede congelar la ejecución de la función si el endpoint remoto se queda colgado, agotando los recursos del stream.\n\n- Pasos para reproducir\n  1. Para el error de API: Enviar una petición POST a la ruta `/subscription` sin enviar carga útil (body).\n  2. Para el error de DLQ: Insertar un registro válido en DynamoDB, pero forzar un error en Lambda B (por ejemplo, asegurar que el usuario no exista en Cognito). Esperar a que el procesamiento agote sus dos reintentos configurados y verificar la SQS.\n\n- Esperado vs. Actual\n  - Esperado: Una petición sin cuerpo debe retornar un código HTTP 400 controlado. Los eventos fallidos de la base de datos deben almacenarse en la cola SQS configurada para su inspección.\n  - Actual: Una petición sin cuerpo genera una excepción no controlada y retorna un código HTTP 500. Los eventos fallidos de la base de datos se pierden definitivamente tras agotar reintentos sin registrar nada en la SQS.\n\n- Ubicacion del error (file/function)\n  - `template.yaml` (Recurso: SyncPermissionsFunction)\n  - `lambda_a/lambda_function.py` (Función: lambda_handler, bloque de parseo)\n  - `lambda_b/lambda_function.py` (Función: lambda_handler, bloque de petición HTTP)\n\n- Logs relevantes\n  - Lambda A: Error generado por el intérprete de Python reportando un fallo TypeError debido a que \"the JSON object must be str, bytes or bytearray, not NoneType\".\n  - Lambda B: Logs mostrando \"[ERROR] Failed to sync permissions: ...\" seguido del agotamiento silencioso de reintentos por parte del servicio de AWS, sin evidencia de entrega en la DLQ.\n\n### Propuesta de Solucion\n- En `template.yaml`, remover la propiedad `DeadLetterQueue` de la configuración raíz de la función Lambda B y configurar su destino en `DestinationConfig > OnFailure` dentro de las propiedades del disparador de DynamoDB.\n- En `lambda_a/lambda_function.py`, corregir la asignación de la variable asegurando la evaluación booleana: `body = json.loads(event.get(\"body\") or \"{}\")`.\n- En `lambda_b/lambda_function.py`, incluir un margen de tiempo en la solicitud HTTP para evitar bloqueos: `requests.get(processor_url, timeout=5)`.\n- En `lambda_b/lambda_function.py`, remover el formato de retorno estilo API Gateway (con statusCode y body), ya que las funciones disparadas por Streams síncronos no procesan esa respuesta.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 133244
+        },
+        "tokens": {
+          "input": 8584,
+          "prompt": 24722,
+          "candidates": 965,
+          "total": 36925,
+          "cached": 16138,
+          "thoughts": 11238,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 7,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "read_file": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 7,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

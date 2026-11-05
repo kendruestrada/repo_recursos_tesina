@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-1.md",
+    "nombre": "Test001-1.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:19"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-2.md",
+    "nombre": "Test001-2.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:22"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-3.md",
+    "nombre": "Test001-3.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:25"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-4.md",
+    "nombre": "Test001-4.md",
+    "puntuacion": 3,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:28"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-5.md",
+    "nombre": "Test001-5.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:31"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-6.md",
+    "nombre": "Test001-6.md",
+    "puntuacion": 3,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:33"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-7.md",
+    "nombre": "Test001-7.md",
+    "puntuacion": 4,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:36"
+  },
+  {
+    "archivo": "D:/Downloads/Test 001-20260302T165200Z-3-001/Test 001/Test001-8.md",
+    "nombre": "Test001-8.md",
+    "puntuacion": 3,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-02 16:37"
+  }
+]

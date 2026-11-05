@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test003/Test003-1.md",
+    "nombre": "Test003-1.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-03 17:16"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-2.md",
+    "nombre": "Test003-2.md",
+    "puntuacion": 2,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:18"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-3.md",
+    "nombre": "Test003-3.md",
+    "puntuacion": 2,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:19"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-4.md",
+    "nombre": "Test003-4.md",
+    "puntuacion": 2,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:20"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-5.md",
+    "nombre": "Test003-5.md",
+    "puntuacion": 2,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:22"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-6.md",
+    "nombre": "Test003-6.md",
+    "puntuacion": 3,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:25"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-7.md",
+    "nombre": "Test003-7.md",
+    "puntuacion": 3,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:27"
+  },
+  {
+    "archivo": "D:/Downloads/Test003/Test003-8.md",
+    "nombre": "Test003-8.md",
+    "puntuacion": 2,
+    "comentario": "aunque no encuentra el error, da una justificacion de su asunción (todas las ejecuciones fallan)",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 2,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 17:29"
+  }
+]

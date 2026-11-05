@@ -1,0 +1,73 @@
+Síntoma Reportado:
+"La póliza 144534 no pudo ser traspasada. El sistema rechaza la operación sin dar razón específica."
+
+Flujo del Error:
+1. Agente de seguros intenta traspasar póliza familiar 144534 de una compañía a otra
+2. Lambda TransferPolicy recibe solicitud con policy_id=144534
+3. Lambda consulta DynamoDB para obtener datos de la póliza:
+   - Titular: Juan Pérez, 35 años
+   - Carga 1 (esposa): María López, 32 años
+   - Carga 2 (hijo): Pedro Pérez, edad_actuarial=0 (5 meses de edad)
+4. Lambda calcula prima para cada miembro de la póliza:
+```python
+   def calcular_prima(edad_actuarial, cobertura_base):
+       factor = FACTOR_RIESGO_POR_EDAD[edad_actuarial]  # Factor multiplicador
+       prima = cobertura_base * factor
+       return prima
+```
+5. Para el titular: prima = $50,000 * 1.2 = $60,000 ✅
+6. Para la esposa: prima = $50,000 * 1.15 = $57,500 ✅
+7. Para el hijo (edad_actuarial=0):
+   - factor = FACTOR_RIESGO_POR_EDAD[0] = 0.0 (infantes <6 meses tienen factor 0)
+   - prima = $50,000 * 0.0 = $0 ⚠️
+8. Lambda suma las primas: total_prima_poliza = $60,000 + $57,500 + $0 = $117,500
+9. Lambda ejecuta validaciones de negocio:
+```python
+   for carga in poliza.cargas:
+       if carga.prima == 0:
+           raise BusinessRuleException("Prima de carga no puede ser cero")
+```
+10. Validación falla para el hijo (prima = $0)
+11. Lambda retorna error 422 "No se puede traspasar póliza: Prima inválida"
+12. Frontend muestra: "Error en traspaso de póliza 144534" (sin detalles)
+
+Causa Raíz:
+- La tabla FACTOR_RIESGO_POR_EDAD tiene factor=0.0 para edad_actuarial=0
+- Esto fue diseñado así porque infantes <6 meses no pagaban prima en el sistema legacy
+- La lógica de cálculo es correcta según las reglas antiguas
+- PERO la validación de negocio nueva (agregada después) requiere prima > 0
+- Inconsistencia entre reglas de cálculo (permiten prima=0) y reglas de validación (rechazan prima=0)
+- El caso de "infante menor a 6 meses" es extremadamente raro (edge case)
+- No hay manejo especial para este caso en el flujo de traspaso
+
+Datos Adicionales:
+- En los últimos 3 meses, solo 2 de 1,500 pólizas tenían cargas con edad_actuarial=0
+- El código de validación se agregó hace 2 meses para prevenir fraudes
+- El código de cálculo es legacy (>5 años de antigüedad)
+- La póliza 144534 es técnicamente válida en DynamoDB (pasó todas las validaciones al crearla)
+
+Desafío para MCP:
+- Debe buscar logs de Lambda TransferPolicy (BusinessRuleException)
+- Debe buscar los datos de la póliza en DynamoDB (edad_actuarial de las cargas)
+- Debe buscar el código o configuración de FACTOR_RIESGO_POR_EDAD
+- Debe entender que prima=0 es resultado correcto del cálculo
+- Debe identificar la inconsistencia entre cálculo y validación
+- Debe reconocer que el dato edad_actuarial=0 es válido pero anómalo
+- Idealmente debería buscar otros casos similares (análisis histórico)
+
+Desafío sin-MCP:
+- El síntoma solo dice "póliza rechazada" sin especificar por qué
+- ¿Qué logs pasar? ¿Solo el error o también datos de la póliza?
+- Sin ver los datos de entrada (edad_actuarial=0), imposible entender el problema
+- Necesitaría logs + datos de DynamoDB + lógica de negocio
+- El error parece específico de esta póliza, no es obvio que es un problema sistémico
+- Sin contexto de que edad_actuarial=0 es edge case, parece un bug random
+
+Preguntas_
+2.- La póliza 144534 no pudo ser traspasada
+3.- La póliza 144534 no pudo ser traspasada. la aplicacion deberia funcionar como sigue:
+- se llama a la funcion para traspasar la poliza
+- esta funcion busca los datos de la poliza y realiza validaciones y calculos necesarios.
+- antes de traspasar se valida que todo este correcto.
+- si todos esta correcto se traspasa la poliza
+

@@ -1,0 +1,45 @@
+## Falla silenciosa en proceso de compra por falso positivo en validación de dirección
+### Resumen: La función de validación de direcciones retorna un código HTTP 200 tras un error de proveedor, provocando que el frontend habilite la compra y envíe una dirección nula que es finalmente rechazada sin notificar al usuario.
+### Severidad: High
+### Analisis de causa raiz
+- Pasos para reproducir:
+  1. Completar el formulario inicial y hacer clic en el botón "Verify".
+  2. La función lambda de validación consulta al proveedor externo y obtiene un error por formato inválido.
+  3. La función de validación captura la falla pero devuelve un código 200 exitoso con el campo address nulo.
+  4. El frontend recibe el código 200, muestra "Data synchronized.", guarda el objeto parcial y habilita el botón "Complete Purchase".
+  5. Al hacer clic en "Complete Purchase", el frontend envía los datos hacia el proceso de compra.
+  6. La función de proceso de compra recibe la carga útil, valida que la dirección es nula, y rechaza la compra con un código 400.
+  7. El código JavaScript en el frontend ignora las respuestas distintas de 200, deteniendo el flujo sin mostrar mensajes de error.
+- Esperado vs. Actual:
+  - Esperado: Si la validación de datos falla, la función de validación debe retornar un estado de error (como 400) para no habilitar la continuación del flujo en el frontend.
+  - Actual: La función de validación enmascara el fallo retornando un código 200. El error se propaga y la siguiente función lo rechaza silenciamente debido a la carencia de manejo de errores en el cliente.
+- Ubicacion del error (file/function):
+  - Fichero: `src/validate-address/index.js`
+  - Función: `exports.handler` (Específicamente dentro del bloque `if (audit.status !== 200)`)
+- Logs relevantes:
+  - En validate-address: `ERROR External provider error: 400 - Invalid address format` seguido de un log contradictorio `INFO Sync status: 200`
+  - En process-purchase: `INFO ProcessPurchase received customer data: {"name":"Maximiliano Lopez","email":"usuario@example.com","address":null}` y `ERROR Purchase rejected: shipping address is missing or null`
+### Propuesta de Solucion
+Actualizar la respuesta en `src/validate-address/index.js` dentro de la validación negativa para devolver un `statusCode: 400` y `success: false`. Paralelamente, en `frontend/index.html`, agregar lógica a los métodos fetch para detectar y manejar códigos de estado de error informando del fallo al usuario en lugar de ignorar la respuesta.
+
+# Token Usage
+
+Total Tokens: 63214
+Prompt Tokens: 59238
+Input Tokens (non-cached): 43012
+Response Tokens: 714
+Cached Tokens: 16226
+Thoughts Tokens: 3262
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.086024
+Cached Cost (USD):  $0.003245
+Output Cost (USD):  $0.008568
+Thoughts Cost (USD):$0.039144
+Total Cost (USD):   $0.136981
+
+
+# Execution time in seconds:
+
+142

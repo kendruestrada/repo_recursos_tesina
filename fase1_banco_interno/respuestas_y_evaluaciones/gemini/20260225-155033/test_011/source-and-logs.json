@@ -1,0 +1,78 @@
+{
+  "session_id": "4386b2c8-8767-489e-a33e-647ab1f83faf",
+  "response": "## [Titulo]: Envíos duplicados por reintentos de SQS debido a payload incorrecto\n### Resumen: Un nombre de campo erróneo en el JSON de la solicitud HTTP provoca que la API externa devuelva error, forzando a la cola SQS a reintentar el mensaje 5 veces y enviando el correo en cada intento.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir\n  1. Enviar una petición a la API de creación de órdenes para generar un mensaje en la cola SQS.\n  2. La función `EmailSenderFunction` procesa el evento e intenta realizar una petición POST al servicio externo.\n  3. En la petición POST, se construye el JSON y se envía la clave \"email\" en lugar de \"customer_email\".\n  4. El servicio externo valida el esquema, no encuentra \"customer_email\" y responde con un error indicando campos faltantes (aunque el sistema procese el envío parcial y lo mande al cliente de todas formas).\n  5. La función captura el estado de error (distinto de 200) y arroja una excepción general.\n  6. Al generarse una excepción en la función, SQS no elimina el mensaje de la cola y automáticamente realiza reintentos. Esto ocurre hasta el límite configurado (`maxReceiveCount: 5`), desencadenando exactamente el mismo comportamiento 5 veces y provocando los 5 correos idénticos.\n- Esperado vs. Actual\n  - Esperado: La función debe enviar la propiedad correcta (\"customer_email\") en el payload. Al hacerlo, el servicio devuelve un estado 200 OK, la ejecución finaliza con éxito y SQS retira el mensaje, logrando que el cliente reciba solo un correo.\n  - Actual: Se envía la propiedad \"email\" en el payload, generando una respuesta de error de validación en la API. La función falla deliberadamente con una excepción, SQS detecta el fallo y repite la ejecución 5 veces consecutivas según su configuración, saturando de correos al cliente.\n- Ubicacion del error (file/function)\n  - email_sender/app.py / lambda_handler\n- Logs relevantes\n  - `Orden recibida de SQS: 67d12459-a8b7-49a1-8590-ff58c8345359`\n  - `Error al enviar correo para la orden 67d12459-a8b7-49a1-8590-ff58c8345359: {\"message\": \"Missing required fields: order_id, customer_email, amount\"}`\n  - `[ERROR] Exception: Error al enviar correo`\n  - `Traceback (most recent call last): File \"/var/task/app.py\", line 27, in lambda_handler raise Exception(\"Error al enviar correo\")`\n### Propuesta de Solucion\nActualizar la construcción del JSON de la llamada HTTP mediante la librería `requests` en el archivo `email_sender/app.py`. Es indispensable cambiar el nombre de la clave `\"email\": email` por `\"customer_email\": email`, acoplándose correctamente al esquema esperado por el servicio de notificaciones. Con este ajuste, el servicio responderá con el código 200, logrando un término de ejecución exitoso en la función que prevenga los bucles de reintentos sobre la cola SQS. No se deben implementar estos cambios en esta etapa, según las directivas establecidas.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 5,
+          "totalErrors": 0,
+          "totalLatencyMs": 143083
+        },
+        "tokens": {
+          "input": 95074,
+          "prompt": 200999,
+          "candidates": 1046,
+          "total": 209975,
+          "cached": 105925,
+          "thoughts": 7930,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 4,
+      "totalSuccess": 4,
+      "totalFail": 0,
+      "totalDurationMs": 5351,
+      "totalDecisions": {
+        "accept": 4,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3470,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 2,
+          "success": 2,
+          "fail": 0,
+          "durationMs": 1878,
+          "decisions": {
+            "accept": 2,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

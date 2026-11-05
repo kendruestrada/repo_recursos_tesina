@@ -1,0 +1,98 @@
+Con toda la información recopilada, presento el análisis completo:
+
+---
+
+## [EmailService]: Circuit Breaker con lógica de recuperación invertida bloquea permanentemente la aplicación
+
+### Summary: La condición de recuperación del circuit breaker está invertida, causando que luego de 5 segundos bloquee permanentemente todas las solicitudes sin posibilidad de recuperación.
+
+### Severity: Critical
+
+---
+
+### Root Cause Analysis
+
+**Flujo de falla confirmado por los logs:**
+
+```
+ThrottlingException (SES) → failure_count llega a 5 → state = OPEN
+→ Pasados 5 segundos → condición invertida → NUNCA transiciona a HALF-OPEN
+→ Circuit breaker permanece OPEN para siempre → toda la cadena cae
+```
+
+**Pasos para reproducir:**
+
+1. `PaymentConfirmation` invoca `OrderProcessing`
+2. `OrderProcessing` invoca `EmailService`
+3. `EmailService` llama a SES → recibe `ThrottlingException` (rate exceeded)
+4. El circuit breaker acumula 5 fallos y transiciona a `OPEN`
+5. Pasados los 5 segundos de `recovery_timeout`, la condición debería abrir la ventana de prueba (`HALF-OPEN`), pero la lógica está **invertida**
+6. El circuit breaker bloquea todas las solicitudes indefinidamente con `"Circuit breaker is OPEN - all requests blocked"`
+
+**Expected vs Actual:**
+
+| Tiempo | Comportamiento esperado | Comportamiento actual |
+|---|---|---|
+| `t < last_failure + 5s` | Bloquear (OPEN) | Transiciona a HALF-OPEN |
+| `t >= last_failure + 5s` | Transicionar a HALF-OPEN | Bloquea para siempre (`raise Exception`) |
+
+**Ubicacion del bug:**
+
+`lambda/email-service/index.py:29-34`
+
+```python
+# CODIGO ACTUAL (INCORRECTO)
+if self.state == "OPEN":
+    if time.time() < self.last_failure_time + self.recovery_timeout:
+        self.state = "HALF-OPEN"   # se activa DENTRO del timeout: error
+        print("Transition to HALF-OPEN state.")
+    else:
+        raise Exception("Circuit breaker is OPEN - all requests blocked")
+        # se activa DESPUES del timeout: bloqueo permanente
+```
+
+La condicion `<` debe ser `>=`. La lógica actual hace exactamente lo contrario: permite pasar dentro del periodo de bloqueo y rechaza indefinidamente una vez que el timeout expiró.
+
+**Problemas secundarios confirmados en logs:**
+
+1. `lambda/email-service/index.py:149-157` — `external_status_check()` retorna `False` cuando `STATUS_CHECK_URL` no está configurada o es inalcanzable. Esto lanza un `ClientError(ServiceUnavailable)` que incrementa el `failure_count` del circuit breaker en cada invocación, acelerando la apertura del circuito.
+
+2. SES rechaza emails con `MessageRejected` porque `no-reply@example.com` y `test@mail.com` no están verificados en SES (cuenta en modo sandbox). Aunque este error está parcialmente manejado en `lambda/email-service/index.py:92-93`, solo aplica cuando el circuito está `CLOSED` y la llamada SES llega a ejecutarse.
+
+3. `lambda/email-service/index.py:58` — El circuit breaker es una **variable de módulo** (`circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=5)`). Su estado persiste entre invocaciones en el mismo contenedor Lambda (ejecuciones calientes). Una vez que el contenedor abre el circuito y supera los 5 segundos, bloquea permanentemente hasta que ese contenedor sea reciclado.
+
+---
+
+### Solution
+
+**Fix 1 — Invertir la condicion de recuperacion** (`email-service/index.py:29-34`):
+
+```python
+# CORRECTO
+if self.state == "OPEN":
+    if time.time() >= self.last_failure_time + self.recovery_timeout:
+        self.state = "HALF-OPEN"
+        print("Transition to HALF-OPEN state.")
+    else:
+        raise Exception("Circuit breaker is OPEN - all requests blocked")
+```
+
+**Fix 2 — `external_status_check` con URL no configurada** (`email-service/index.py:150-157`):
+
+Si `STATUS_CHECK_URL` es `None`, la función lanza excepcion interna y retorna `False`, causando fallos artificiales en el circuit breaker. Se debe validar que la variable esté definida antes de hacer la llamada, o bien retornar `True` (saludable) cuando el check externo no está configurado, dependiendo del comportamiento esperado.
+
+**Fix 3 — Verificar identidades en Amazon SES:**
+
+Verificar `no-reply@example.com` como sender identity en SES, y si la cuenta está en modo sandbox, verificar también las direcciones destino, o bien solicitar salida del sandbox en AWS.
+
+**Fix 4 — Considerar externalizar el estado del circuit breaker:**
+
+Al ser variable de módulo, el estado es local al contenedor Lambda. Si se requiere consistencia entre instancias concurrentes, el estado debería externalizarse a DynamoDB o ElastiCache (Redis).
+
+# Total cost USD
+
+0.5197805
+
+# Execution time in seconds: 
+
+223

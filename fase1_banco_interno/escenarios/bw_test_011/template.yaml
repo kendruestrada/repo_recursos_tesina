@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Customer Orders API
+
+Resources:
+  OrdersDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: orders-dlq
+      MessageRetentionPeriod: 1209600
+
+  OrdersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: demo-queue
+      VisibilityTimeout: 30
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt OrdersDLQ.Arn
+        maxReceiveCount: 5
+
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      TracingEnabled: true
+
+  ProcessOrderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProcessOrderFunction}"
+      RetentionInDays: 14
+
+  ProcessOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: process_order/
+      FunctionName: ProcessOrderFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref OrdersQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt OrdersQueue.QueueName
+      Events:
+        ApiEvent:
+          Type: Api  
+          Properties:
+            Path: /report
+            Method: post
+            RestApiId: !Ref Api
+    
+  EmailSenderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${EmailSenderFunction}"
+      RetentionInDays: 14
+
+  EmailSenderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: email_sender/
+      FunctionName: EmailSenderFunction
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Environment:
+        Variables:
+          EMAIL_SERVICE_URL: "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/send-email/"
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OrdersQueue.Arn
+            BatchSize: 1
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/v1/report"

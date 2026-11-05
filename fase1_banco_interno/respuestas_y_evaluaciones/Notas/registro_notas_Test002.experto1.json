@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test002/Test002-1.md",
+    "nombre": "Test002-1.md",
+    "puntuacion": 2,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 2,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-03 10:41"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-2.md",
+    "nombre": "Test002-2.md",
+    "puntuacion": 1,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 1,
+    "calidad_propuestas": 1,
+    "realidad_diagnostico_(nivel_alucinacion)": 1,
+    "fecha": "2026-03-03 10:42"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-3.md",
+    "nombre": "Test002-3.md",
+    "puntuacion": 1,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 1,
+    "calidad_propuestas": 1,
+    "realidad_diagnostico_(nivel_alucinacion)": 1,
+    "fecha": "2026-03-03 10:43"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-4.md",
+    "nombre": "Test002-4.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-03 12:04"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-5.md",
+    "nombre": "Test002-5.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 12:11"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-6.md",
+    "nombre": "Test002-6.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 3,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 12:13"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-7.md",
+    "nombre": "Test002-7.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-03 12:16"
+  },
+  {
+    "archivo": "D:/Downloads/Test002/Test002-8.md",
+    "nombre": "Test002-8.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": false,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-03 12:18"
+  }
+]

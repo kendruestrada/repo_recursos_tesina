@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Categorias en DynamoDB
+
+Globals:
+  Function:
+    Timeout: 29
+    MemorySize: 256
+    Runtime: python3.12
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: ProductSearchService
+        POWERTOOLS_METRICS_NAMESPACE: RetailApp
+        LOG_LEVEL: INFO
+        TABLE_NAME: !Ref ProductsTable
+
+Resources:
+  SearchProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: product_service/
+      FunctionName: SearchProductsFunction
+      Handler: app.lambda_handler
+      Description: Función que busca productos por categoría'
+      Architectures:
+        - x86_64
+      Tracing: Active
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ProductsTable
+      Events:
+        SearchEvent:
+          Type: Api
+          Properties:
+            Path: /search
+            Method: GET
+      Tags:
+        LambdaPowertools: python
+
+  SearchProductsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SearchProductsFunction}
+      RetentionInDays: 14
+
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Products
+      AttributeDefinitions:
+        - AttributeName: category_id
+          AttributeType: S
+        - AttributeName: product_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: category_id
+          KeyType: HASH
+        - AttributeName: product_id
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Environment
+          Value: testw
+
+  ProductsTableNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /bw-019/products-table-name
+      Type: String
+      Value: !Ref ProductsTable
+
+Outputs:
+  SearchApiElectronics:
+    Description: "URL para electronics"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/search?category=electronics"
+
+  SearchApiBooks:
+    Description: "URL para comparar (categoría rápida)"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/search?category=books"
+
+  ProductsTableName:
+    Description: "Nombre de la tabla DynamoDB"
+    Value: !Ref ProductsTable

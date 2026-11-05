@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test009/Test009-1.md",
+    "nombre": "Test009-1.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:12"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-2.md",
+    "nombre": "Test009-2.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:12"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-3.md",
+    "nombre": "Test009-3.md",
+    "puntuacion": 5,
+    "comentario": "todo bien (explicacion muy corta)",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:14"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-4.md",
+    "nombre": "Test009-4.md",
+    "puntuacion": 5,
+    "comentario": "todo bien",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:15"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-5.md",
+    "nombre": "Test009-5.md",
+    "puntuacion": 5,
+    "comentario": "encuentra otros bugs no estoy seguro si son reales",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 4,
+    "fecha": "2026-03-09 12:16"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-6.md",
+    "nombre": "Test009-6.md",
+    "puntuacion": 5,
+    "comentario": "todo bien, buena explicacion",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-03-09 12:18"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-7.md",
+    "nombre": "Test009-7.md",
+    "puntuacion": 3,
+    "comentario": "encuentra el error pero habla de errores de compilacion, que al parecer no existen",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-09 12:19"
+  },
+  {
+    "archivo": "D:/Downloads/Test009/Test009-8.md",
+    "nombre": "Test009-8.md",
+    "puntuacion": 3,
+    "comentario": "todo bien buena explicacion",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 3,
+    "fecha": "2026-03-09 12:20"
+  }
+]

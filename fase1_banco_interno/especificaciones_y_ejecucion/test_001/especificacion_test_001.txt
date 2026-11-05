@@ -1,0 +1,47 @@
+Síntoma Reportado:
+"Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error."
+
+Flujo del Error:
+1. Usuario llena formulario de datos del cliente (nombre, email, dirección)
+2. Frontend envía datos a Lambda ValidateAddress para validar la dirección
+3. Lambda ValidateAddress llama a servicio externo de validación (ej: Google Maps API)
+4. Servicio externo retorna error 400 "Invalid address format" (dirección no encontrada)
+5. Lambda ValidateAddress captura el error pero:
+   - NO propaga el error al frontend
+   - Setea address = null/empty en el objeto del cliente
+   - Retorna HTTP 200 "Success" (validación "completada" aunque falló)
+6. Frontend recibe 200, asume todo OK, habilita botón "Comprar"
+7. Usuario hace clic en "Comprar"
+8. Lambda ProcessPurchase recibe JSON con datos del cliente pero address = null
+9. Lambda ProcessPurchase tiene validación: if (!data.address) { return 400 }
+10. Frontend recibe 400 pero no muestra mensaje de error al usuario
+11. Usuario ve que el botón no hace nada
+
+Causa Raíz:
+- Lambda ValidateAddress no propaga errores de validación correctamente
+- Falla silenciosamente y deja campo crítico vacío (address = null)
+- Frontend no valida que address existe antes de habilitar botón "Comprar"
+- Lambda ProcessPurchase rechaza la compra pero frontend no maneja el error
+- Ningún componente muestra feedback al usuario sobre qué salió mal
+
+Desafío para MCP:
+- Debe rastrear el flujo completo: UI → ValidateAddress → ProcessPurchase
+- Debe buscar logs de ValidateAddress (ver que retornó 200 pero con address vacío)
+- Debe buscar logs del servicio externo (error 400)
+- Debe buscar logs de ProcessPurchase (validación fallida)
+- Debe correlacionar que la dirección ingresada ≠ dirección en el payload final
+- Debe entender que el 200 de ValidateAddress es engañoso
+
+Desafío sin-MCP:
+- El síntoma no indica qué componente falló
+- ¿Qué logs pasar? ¿ValidateAddress? ¿ProcessPurchase? ¿Ambos?
+- Sin ver el flujo completo, imposible entender que la validación fue el punto de falla
+- Necesitaría logs de frontend + backend + input/output de cada Lambda
+
+Preguntas:
+2.- Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error.
+3.- Al presionar el botón 'Comprar', la aplicación no hace nada. El botón no responde y no aparece ningún error. la aplicación deberia funcionar como sigue:
+- usuario llena los datos del formulario.
+- los datos son validados
+- si la validacion es correcta se debe habilitar el boton "comprar"
+- al presionar el boton comprar se deberia seguir con el flujo de compra

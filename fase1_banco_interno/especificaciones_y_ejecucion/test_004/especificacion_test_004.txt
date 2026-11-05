@@ -1,0 +1,30 @@
+Síntoma Reportado:
+"El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium"
+
+Flujo del Error:
+1. Lambda A crea registro de suscripción en DynamoDB → ✅ Success
+2. Lambda B (triggered por Stream de DynamoDB) debe crear permisos en Cognito → ❌ Falla
+3. Lambda B hace retry automático (SQS DLQ) pero el retry falla por timeout
+4. El usuario ve subscription_status = "active" en DynamoDB pero en Cognito no tiene el grupo "premium_users"
+
+Causa Raíz:
+- El Lambda B tiene timeout de 3 segundos
+- La llamada a Cognito AdminAddUserToGroup toma 4 segundos (sobrecarga del servicio)
+- El retry se ejecuta pero vuelve a hacer timeout
+- No hay compensating transaction, queda estado inconsistente
+
+Desafío para MCP:
+- Debe buscar logs de Lambda A (exitoso)
+- Debe buscar logs de Lambda B (timeout)
+- Debe buscar DLQ messages (retries fallidos)
+- Debe correlacionar que la suscripción existe pero los permisos no
+
+Desafío sin-MCP:
+- ¿Qué logs pasarle? El síntoma no dice nada sobre Lambda B
+
+Preguntas:
+2.- El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium
+3.- El usuario ve su suscripción activa en el dashboard pero no puede acceder a funciones premium, la funcion deberia funcionar como sigue:
+- guardar la suscripción de DynamoDB
+- inbediatamente despues llamar a una funcion que cambia los permisos en cognito, (si esto falla esta definido un mecanismo de reintentos)
+

@@ -1,0 +1,113 @@
+Tengo toda la evidencia necesaria para el análisis completo. Los logs confirman inequívocamente que todos los requests lentos (600-900ms) son de la categoría `electronics`, mientras que `books` responde en ~17ms.
+
+---
+
+## Rendimiento lento en búsqueda de productos por categoría
+
+### Summary: La categoría `electronics` genera múltiples llamadas a DynamoDB por request debido a que sus items superan el límite de 1MB por respuesta de la API, forzando paginación interna en el loop `while True`.
+
+### Severity: High
+
+---
+
+### Root Cause Analysis
+
+**Patrón observado en logs** (mismo instante, `cold_start: false` en ambos):
+
+| RequestId | Categoría | Duración |
+|---|---|---|
+| `64945c76` | `books` | **17.18 ms** |
+| `b09f911e` | `electronics` | **734.65 ms** |
+| `d6fbad67` | `electronics` | **605.41 ms** |
+| `26d82ce2` | `electronics` | **627.78 ms** |
+
+El factor ~40x de diferencia descarta cold starts y problemas de red. Es estructural.
+
+**Location:** `product_service/app.py:50-73` — función `lambda_handler`
+
+**Flujo de ejecución problemático:**
+
+```python
+# app.py:51-72
+fetch_limit = limit  # default = 20
+
+query_kwargs = {
+    "KeyConditionExpression": Key("category_id").eq(category),
+    "Limit": fetch_limit,   # DynamoDB evalúa max 20 items...
+}                           # ...pero también aplica límite de 1MB por respuesta
+
+all_items = []
+while True:
+    response = table.query(**query_kwargs)  # <-- llamada DynamoDB
+    all_items.extend(response.get("Items", []))
+
+    if len(all_items) >= fetch_limit:
+        break
+
+    last_key = response.get("LastEvaluatedKey")
+    if not last_key:
+        break
+
+    query_kwargs["ExclusiveStartKey"] = last_key
+    query_kwargs["Limit"] = fetch_limit - len(all_items)  # reduce el límite
+```
+
+**Mecanismo del fallo:**
+
+DynamoDB impone dos límites independientes en una operación `Query`:
+1. El parámetro `Limit` (items a evaluar) → fijado en 20
+2. El límite interno de **1MB por respuesta** → independiente del `Limit`
+
+El código en `app.py:79` revela que los items tienen un atributo `data` de gran tamaño:
+
+```python
+# app.py:77-81
+for i in items:
+    safe_item = i.copy()
+    if "data" in safe_item:
+        safe_item["data"] = "(payload hidden)"  # <- se oculta en respuesta
+```
+
+El campo `data` **se lee de DynamoDB pero se descarta en la respuesta**. Si cada item de `electronics` tiene un `data` de ~100KB, DynamoDB retorna solo 10 items por llamada antes de alcanzar el 1MB. El loop `while True` continúa paginando: para reunir 20 items necesita ~7-10 llamadas DynamoDB en serie, acumulando 600-900ms de latencia.
+
+Para `books`, los items son pequeños → DynamoDB retorna los 20 en una sola llamada → 17ms.
+
+**Steps to reproduce:**
+1. Invocar `SearchProductsFunction` con `?category=electronics&limit=20`
+2. Observar duración > 600ms consistentemente
+3. Invocar con `?category=books&limit=20`
+4. Observar duración ~17ms
+
+**Expected vs Actual:**
+- Esperado: ~20ms para cualquier categoría (1 llamada DynamoDB)
+- Actual: 600-900ms para `electronics` (N llamadas DynamoDB por paginación interna)
+
+---
+
+### Solution
+
+**Solución directa** — agregar `ProjectionExpression` en la query para excluir el atributo `data` desde el origen, evitando que los items grandes saturen el límite de 1MB:
+
+```python
+# app.py:53-56
+query_kwargs = {
+    "KeyConditionExpression": Key("category_id").eq(category),
+    "Limit": fetch_limit,
+    "ProjectionExpression": "category_id, product_id, #nm, price, stock",
+    "ExpressionAttributeNames": {"#nm": "name"},  # evitar reserved words
+}
+```
+
+Esto elimina el campo `data` en la lectura de DynamoDB misma. La respuesta ya lo estaba descartando (`app.py:79-81`), por lo que no hay impacto funcional.
+
+**Efecto esperado:** reducción de tamaño por item de ~100KB a ~1KB → todos los 20 items de cualquier categoría caben en una sola respuesta DynamoDB → latencia uniforme ~15-20ms para `books` y `electronics`.
+
+**Solución complementaria** — si `data` es necesario en algún flujo futuro, exponer un endpoint separado que lo retorne por `product_id` individual, evitando traerlo en búsquedas por categoría.
+
+# Total cost USD
+
+0.7744267499999999
+
+# Execution time in seconds: 
+
+254

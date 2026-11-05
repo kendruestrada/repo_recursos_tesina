@@ -1,0 +1,65 @@
+Síntoma Reportado:
+"Después de 2-3 horas de uso, la aplicación empieza a responder lento y eventualmente deja de responder"
+
+Flujo del Error:
+1. Lambda ReportGenerator procesa reportes PDF
+2. Usa librería externa que carga templates en memoria
+3. Los templates NO se liberan después de cada invocación (global scope)
+4. En Lambda, el container se reutiliza para múltiples invocaciones
+5. Cada invocación acumula más templates en memoria
+6. Después de ~100 invocaciones, el Lambda llega a 512 MB (su límite)
+7. Empieza a hacer swap, se pone lento
+8. Eventualmente: MemoryError o Timeout
+
+Causa Raíz:
+- Variable global mal usada: `TEMPLATE_CACHE = {}` que nunca se limpia
+- Lambda container reuse hace que el problema sea acumulativo
+- No hay límite de tamaño en el cache
+- El error solo ocurre en Lambdas "calientes" (warm containers)
+
+Desafío para MCP:
+- Debe buscar múltiples invocaciones del MISMO container
+- Debe correlacionar "Max Memory Used" creciente en REPORT lines
+- Debe buscar el código para identificar variables globales
+- Debe entender el concepto de Lambda container lifecycle
+
+Desafío sin-MCP:
+- ¿Qué logs pasar? ¿Solo el que falló o todos los anteriores del container?
+
+-----
+# Para generar el error:
+# - hacer llamadas constantes al servicio
+# - ejemplo de llamada en './test.sh'
+
+# llamadas concurrentes constantes con vegeta:
+```
+vegeta attack -duration=120s -rate=2 -targets=testing/target.list | tee results.bin | vegeta report
+```
+
+# resultados
+```
+Requests      [total, rate, throughput]         240, 2.01, 1.42
+Duration      [total, attack, wait]             2m23s, 2m0s, 23.945s
+Latencies     [min, mean, 50, 90, 95, 99, max]  4.424s, 7.165s, 5.548s, 10.055s, 16.556s, 29.508s, 29.553s
+Bytes In      [total, mean]                     3393774, 14140.73
+Bytes Out     [total, mean]                     0, 0.00
+Success       [ratio]                           84.58%
+Status Codes  [code:count]                      200:203  502:29  504:8
+Error Set:
+502 Bad Gateway
+504 Gateway Timeout
+```
+
+# logs en CW
+
+REPORT RequestId: de92d643-0840-4dc4-b99f-35698f5125ff	Duration: 9668.39 ms	Billed Duration: 9669 ms	Memory Size: 128 MB	Max Memory Used: 128 MB	Status: error	Error Type: Runtime.OutOfMemory
+---
+
+Preguntas:
+2.- Después de 2-3 horas de uso, la aplicación empieza a responder lento y eventualmente deja de responder
+3.- Después de 2-3 horas de uso, la aplicación empieza a responder lento y eventualmente deja de responder
+- El usuario pide un reporte PDF.
+- El sistema toma el template necesario para armarlo.   
+- Se genera el documento y se le entrega al usuario.
+Resultado: La aplicación siempre sea capaz de abordar las solicitudes, se mantenga ligera y rápida sin importar cuántos reportes se generen.
+

@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: "Photo Deletion"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.12
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # ============================================================================
+  # S3 Bucket: Photo Storage
+  # ============================================================================
+  PhotosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-photos-bucket-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Suspended
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # DynamoDB Table: Photo Metadata
+  # ============================================================================
+  PhotosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-photos"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: photo_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: photo_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user_id-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # API Gateway
+  # ============================================================================
+  PhotoApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${Environment}-photo-api"
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # ============================================================================
+  # Lambda: UploadPhoto
+  # ============================================================================
+  UploadPhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-UploadPhoto"
+      CodeUri: upload_photo/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref PhotosBucket
+          TABLE_NAME: !Ref PhotosTable
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref PhotosBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotosTable
+      Events:
+        UploadEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotoApi
+            Path: /photos/upload
+            Method: post
+
+  # ============================================================================
+  # Lambda: DeletePhoto
+  # ============================================================================
+  DeletePhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-DeletePhoto"
+      CodeUri: delete_photo/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref PhotosBucket
+          TABLE_NAME: !Ref PhotosTable
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref PhotosBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotosTable
+      Events:
+        DeleteEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotoApi
+            Path: /photos/{photo_id}
+            Method: delete
+
+  # ============================================================================
+  # Lambda: ListPhotos
+  # ============================================================================
+  ListPhotosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-ListPhotos"
+      CodeUri: list_photos/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref PhotosBucket
+          TABLE_NAME: !Ref PhotosTable
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref PhotosBucket
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotosTable
+      Events:
+        ListEndpoint:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotoApi
+            Path: /photos/user/{user_id}
+            Method: get
+
+
+  # ============================================================================
+  # CloudWatch Log Groups
+  # ============================================================================
+  UploadPhotoLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-UploadPhoto"
+      RetentionInDays: 7
+
+  DeletePhotoLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-DeletePhoto"
+      RetentionInDays: 7
+
+  ListPhotosLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-ListPhotos"
+      RetentionInDays: 7
+
+Outputs:
+  PhotoApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !Sub "https://${PhotoApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+
+  PhotosBucketName:
+    Description: S3 Bucket for photos
+    Value: !Ref PhotosBucket
+
+  PhotosTableName:
+    Description: DynamoDB table for photo metadata
+    Value: !Ref PhotosTable
+
+  UploadPhotoFunctionArn:
+    Description: Upload Photo Lambda ARN
+    Value: !GetAtt UploadPhotoFunction.Arn
+
+  DeletePhotoFunctionArn:
+    Description: Delete Photo Lambda ARN (BUGGY)
+    Value: !GetAtt DeletePhotoFunction.Arn
+
+  ListPhotosFunctionArn:
+    Description: List Photos Lambda ARN
+    Value: !GetAtt ListPhotosFunction.Arn

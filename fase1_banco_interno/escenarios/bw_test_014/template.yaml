@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  bw_test_014
+Resources:
+
+  UserPointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UserPointsTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+
+  PurchaseRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger points update on purchase completion"
+      EventPattern:
+        source:
+          - "com.bugwizard.store"
+        detail-type:
+          - "PurchaseCompleted"
+      State: "ENABLED"
+      Targets:
+        - Arn: !GetAtt UpdateLoyaltyPointsFunction.Arn
+          Id: "UpdateLoyaltyPointsTarget"
+
+  UpdateLoyaltyPointsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: UpdateLoyaltyPointsFunction
+      Handler: update_points.handler
+      Runtime: python3.9
+      ReservedConcurrentExecutions: 1
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserPointsTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref UserPointsTable
+      Events:
+        PurchaseEvent:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - "com.bugwizard.store"
+              detail-type:
+                - "PurchaseCompleted"
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /points
+            Method: post
+
+  ProcessPurchaseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      FunctionName: ProcessPurchaseFunction
+      Handler: process_purchase.handler
+      Runtime: python3.9
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: default
+      Environment:
+        Variables:
+          EVENT_BUS_NAME: default
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /purchase
+            Method: post
+
+  PurchaseRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateLoyaltyPointsFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PurchaseRule.Arn
+
+  UpdateLoyaltyPointsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${UpdateLoyaltyPointsFunction}"
+      RetentionInDays: 14
+
+  ProcessPurchaseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProcessPurchaseFunction}"
+      RetentionInDays: 14
+
+Outputs:
+  UserPointsTableName:
+    Description: "DynamoDB Table Name for User Points"
+    Value: !Ref UserPointsTable
+  UpdateLoyaltyPointsApi:
+    Description: "API Gateway Endpoint URL for Prod stage for Update Points"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/points/"
+  ProcessPurchaseApi:
+    Description: "API Gateway Endpoint URL for Prod stage for Process Purchase"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/purchase/"

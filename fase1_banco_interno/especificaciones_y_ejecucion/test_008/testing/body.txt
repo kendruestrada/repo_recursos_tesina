@@ -1,0 +1,54 @@
+{
+    "transfers": [
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      },
+      {
+        "sourceAccountId": "ACC001",
+        "destAccountId": "ACC002",
+        "amount": 10
+      }
+    ]
+}

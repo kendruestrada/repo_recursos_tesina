@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Sistema de suscripciones
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: '{{resolve:ssm:/config/lambda/generic/timeout}}'
+    Architectures:
+      - x86_64
+
+Parameters:
+  ProcessorEndpointUrl:
+    Type: String
+    Description: URL del endpoint del procesador externo
+
+Resources:
+  # DynamoDB Table
+  SubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: subscriptions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: premium-users-pool
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+
+  # Cognito User Group
+  PremiumUserGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: premium_users
+      UserPoolId: !Ref UserPool
+      Description: Usuarios con acceso premium
+
+  # SQS Dead Letter Queue
+  PermissionsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: permissions-sync-dlq
+      MessageRetentionPeriod: 1209600
+
+  # Lambda A - Create Subscription (Exitoso)
+  CreateSubscriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lambda-a-create-subscription
+      CodeUri: lambda_a/
+      Handler: lambda_function.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref SubscriptionsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SubscriptionsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /subscription
+            Method: post
+
+  SyncPermissionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: lambda-b-sync-permissions
+      CodeUri: lambda_b/
+      Handler: lambda_function.lambda_handler
+      ReservedConcurrentExecutions: 1
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt PermissionsDLQ.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          GROUP_NAME: premium_users
+          PROCESSOR_ENDPOINT_URL: !Ref ProcessorEndpointUrl
+      Policies:
+        - DynamoDBStreamReadPolicy:
+            TableName: !Ref SubscriptionsTable
+            StreamName: !GetAtt SubscriptionsTable.StreamArn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminGetUser
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt PermissionsDLQ.Arn
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt SubscriptionsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 1
+            MaximumRetryAttempts: 2
+
+  # Log Groups
+  CreateSubscriptionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CreateSubscriptionFunction}
+      RetentionInDays: 14
+
+  SyncPermissionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SyncPermissionsFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/subscription"
+  
+  SubscriptionsTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref SubscriptionsTable
+  
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+  
+  DLQUrl:
+    Description: Dead Letter Queue URL
+    Value: !Ref PermissionsDLQ
+  
+  LambdaALogGroup:
+    Description: Lambda A CloudWatch Log Group
+    Value: !Ref CreateSubscriptionLogGroup
+
+  LambdaBLogGroup:
+    Description: Lambda B CloudWatch Log Group
+    Value: !Ref SyncPermissionsLogGroup

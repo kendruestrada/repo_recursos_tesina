@@ -1,0 +1,90 @@
+[
+  {
+    "archivo": "D:/Downloads/Test018/Test018-1.md",
+    "nombre": "Test018-1.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-2.md",
+    "nombre": "Test018-2.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-3.md",
+    "nombre": "Test018-3.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-4.md",
+    "nombre": "Test018-4.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-5.md",
+    "nombre": "Test018-5.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 5,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-6.md",
+    "nombre": "Test018-6.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 3,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-7.md",
+    "nombre": "Test018-7.md",
+    "puntuacion": 5,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 5,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  },
+  {
+    "archivo": "D:/Downloads/Test018/Test018-8.md",
+    "nombre": "Test018-8.md",
+    "puntuacion": 4,
+    "comentario": "",
+    "identifico_error": true,
+    "calidad_explicacion": 4,
+    "calidad_propuestas": 4,
+    "realidad_diagnostico_(nivel_alucinacion)": 5,
+    "fecha": "2026-04-29 17:48"
+  }
+]

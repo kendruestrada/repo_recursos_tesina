@@ -1,0 +1,56 @@
+## [Envios Duplicados]: Reintentos de SQS por error de validacion en la API de correos
+### Resumen: La funcion de envio de correos envia el payload con un nombre de campo incorrecto, provocando un error en la API externa y forzando a SQS a reintentar la ejecucion multiples veces.
+### Severidad: High
+### Analisis de causa raiz
+- Pasos para reproducir:
+  1. Un cliente finaliza una compra y `ProcessOrderFunction` deposita el mensaje de confirmacion en la cola SQS.
+  2. `EmailSenderFunction` toma el mensaje y realiza una peticion POST a la API de correos (`EMAIL_SERVICE_URL`).
+  3. En la peticion POST, se utiliza la clave `"email"` en lugar del campo requerido `"customer_email"`.
+  4. La API externa de correos procesa el evento pero responde con un error de validacion indicando campos faltantes.
+  5. La Lambda captura el codigo de error (distinto a 200), registra el fallo y lanza una excepcion (`raise Exception`).
+  6. Debido a la excepcion, la funcion Lambda termina anormalmente. SQS asume que el procesamiento fallo y vuelve a encolar y entregar el mensaje hasta agotar los reintentos (5 veces), causando la duplicacion de envios de correos al cliente.
+- Esperado vs. Actual:
+  - Esperado: Si ingresa el dato de correo, el payload enviado a la API deberia ser un objeto como `{"customer_email": "test@test.com", "order_id": "123", "amount": 100}`. Esto retornaria un HTTP 200, concluyendo la Lambda exitosamente y eliminando el mensaje de la cola SQS sin retornos.
+  - Actual: El payload se construye incorrectamente como `{"email": "test@test.com", "order_id": "123", "amount": 100}`. Esto desencadena un HTTP 400 en la API, una excepcion en el codigo y multiples reintentos iterativos por parte de SQS.
+- Ubicacion del error (file/function): `email_sender/app.py` / funcion `lambda_handler`
+- Logs relevantes:
+  ```text
+  Error al enviar correo para la orden 67d12459-a8b7-49a1-8590-ff58c8345359: {"message": "Missing required fields: order_id, customer_email, amount"}
+  
+  [ERROR] Exception: Error al enviar correo
+  Traceback (most recent call last):
+    File "/var/task/app.py", line 27, in lambda_handler
+      raise Exception("Error al enviar correo")
+  ```
+### Propuesta de Solucion
+1. **Solucion Directa (Mapeo de Datos)**: Corregir el diccionario JSON en `email_sender/app.py` para coincidir con la especificacion de la API externa.
+   ```python
+   response = requests.post(
+       EMAIL_SERVICE_URL,
+       json={"customer_email": email, "order_id": order_id, "amount": amount},
+   )
+   ```
+2. **Solucion Alternativa (Control de Flujo)**: Identificar errores no recuperables (HTTP 4xx por mala estructura). En lugar de arrojar una excepcion indiscriminadamente, registrar el error en los logs y retornar un estado de salida exitoso a SQS para que el mensaje no siga reintentandose. La excepcion solo deberia lanzarse ante problemas de infraestructura temporales (ej. HTTP 5xx o timeout).
+3. **Pruebas y Configuracion Adicional**: Implementar una Dead Letter Queue (DLQ) en la cola origen SQS. Esto ayudara a derivar de forma controlada aquellos eventos que excedan un umbral prudente de reintentos (por ejemplo, maximo 2), permitiendo analizar el estado de los datos malformados sin causar problemas reiterados al usuario final.
+
+# Token Usage
+
+Total Tokens: 62188
+Prompt Tokens: 55712
+Input Tokens (non-cached): 39498
+Response Tokens: 983
+Cached Tokens: 16214
+Thoughts Tokens: 5493
+
+# Estimated Cost (model: gemini-3-pro-preview)
+
+Input Cost (USD):   $0.078996
+Cached Cost (USD):  $0.003243
+Output Cost (USD):  $0.011796
+Thoughts Cost (USD):$0.065916
+Total Cost (USD):   $0.159951
+
+
+# Execution time in seconds:
+
+103

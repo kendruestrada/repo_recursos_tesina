@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  LedgerTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: test-016-account-ledger
+      PrimaryKey:
+        Name: account_id
+        Type: String
+
+  TransactionTrackerTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: test-016-transaction-tracker
+      PrimaryKey:
+        Name: resource_key
+        Type: String
+
+  TransferFundsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: test-016-transfer-processor
+      CodeUri: src/
+      Handler: transfer_funds.handler
+      Runtime: python3.13
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          LEDGER_TABLE: !Ref LedgerTable
+          TRACKER_TABLE: !Ref TransactionTrackerTable
+          INTERNAL_PROC_ENDPOINT: "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/Prod/api/processor"
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref LedgerTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref TransactionTrackerTable }
+      Events:
+        TransferApi:
+          Type: Api
+          Properties:
+            Path: /transfer
+            Method: post
+
+  TransferFundsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/test-016-transfer-processor
+      RetentionInDays: 7
+
+  InitializeAccountsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: test-016-acc-setup
+      CodeUri: src/
+      Handler: initialize_accounts.handler
+      Runtime: python3.13
+      Environment:
+        Variables:
+          LEDGER_TABLE: !Ref LedgerTable
+          TRACKER_TABLE: !Ref TransactionTrackerTable
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref LedgerTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref TransactionTrackerTable }
+
+  InitializeAccountsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/test-016-acc-setup
+      RetentionInDays: 7
+
+Outputs:
+  TransferApiUrl:
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/transfer"
+  InitFunction:
+    Value: !Ref InitializeAccountsFunction
+  LocksTableName:
+    Value: !Ref TransactionTrackerTable

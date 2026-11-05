@@ -1,0 +1,15 @@
+YOLO mode is enabled. All tool calls will be automatically approved.
+YOLO mode is enabled. All tool calls will be automatically approved.
+Bash command parsing error detected for command: << 'EOF' > parse_log.js
+const log = `{"event":"DispatchingEmailToSES","recipient":"preslee.jeancarlo@dropmeon.com","ses_payload":{"Source":"usuario@example.com","Destination":{"ToAddresses":["preslee.jeancarlo@dropmeon.com"]},"Message":{"Subject":{"Data":"Welcome to our Service","Charset":"ISO-8859-1"},"Body":{"Text":{"Data":"\n        Hello Jos\u00e9 Garc\u00eda,\n        \n        Welcome! We have registered your details:\n        Birth Date: 1990-01-01\n        \n        Best regards,\n        The Team\n      ","Charset":"ISO-8859-1"}}}}}`;
+const parsed = JSON.parse(log);
+console.log(parsed.ses_payload.Message.Body.Text.Data);
+EOF Syntax Errors: [
+  'Error node: "<" at 0:0',
+  'Error node: "`{"event":"DispatchingEmailToSES","recipient":"preslee.jeancarlo@dropmeon.com","ses_payload":{"Source":"usuario@example.com","Destination":{"ToAddresses":["preslee.jeancarlo@dropmeon.com"]},"Message":{"Subject":{"Data":"Welcome to our Service","Charset":"ISO-8859-1"},"Body":{"Text":{"Data":"\\n        Hello Jos\\u00e9 Garc\\u00eda,\\n        \\n        Welcome! We have registered your details:\\n        Birth Date: 1990-01-01\\n        \\n        Best regards,\\n        The Team\\n      ","Charset":"ISO-8859-1"}}}}}`;\n' +
+    'const parsed = JSON.parse(log);\n' +
+    'console.log(parsed.ses_payload.Message.Body.Text.Data);\n' +
+    'EOF" at 1:12',
+  'Error node: "`" at 1:523',
+  'Missing node: "" at 2:25'
+]

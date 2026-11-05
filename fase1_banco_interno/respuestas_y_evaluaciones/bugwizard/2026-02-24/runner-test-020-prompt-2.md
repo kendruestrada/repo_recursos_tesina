@@ -1,0 +1,149 @@
+## Análisis de Seguridad - Validación de Sesiones
+
+### **Ticket:**
+El equipo de ciberseguridad reporta que la información de sesión puede ser obtenida desde sitios externos sospechosos. Se requiere validar que el sistema de autenticación JWT y validación de sesiones activas funcione correctamente y no permita accesos no autorizados.
+
+### **Hallazgos en los logs:**
+
+1. **Accesos desde múltiples orígenes:**
+   - `https://app-rewards-service.io` (origen legítimo)
+   - `https://test-020-frontendbucket.s3.amazonaws.com` (origen de pruebas)
+   - Ambos orígenes están accediendo al endpoint `/user/profile`
+
+2. **Advertencias de deprecación de Node.js:**
+   - Múltiples advertencias sobre Node.js v18.20.8 que será descontinuado en enero 2026
+   - No representa un problema de seguridad inmediato pero indica falta de mantenimiento
+
+3. **Patrones de acceso regulares:**
+   - Requests cada 5 minutos aproximadamente desde ambos orígenes
+   - Todos los requests muestran `"action":"none"` en los logs de auditoría
+   - No se observan errores de autenticación o autorización en los logs
+
+### **Relación con el código fuente:**
+
+**VULNERABILIDADES CRÍTICAS IDENTIFICADAS:**
+
+1. **Validación JWT Insuficiente** (`profile_service.js` líneas 19-26):
+```javascript
+if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+        const token = authHeader.split(" ")[1];
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+        userId = payload.sub; 
+    } catch (e) {
+        console.error("JWT Error");
+    }
+}
+```
+**PROBLEMA:** El JWT no está siendo validado criptográficamente. Solo se decodifica el payload sin verificar la firma, lo que permite tokens falsificados.
+
+2. **CORS Permisivo** (`template.yaml` línea 28):
+```yaml
+AllowOrigin: "'*'"
+```
+**PROBLEMA:** Permite requests desde cualquier origen, facilitando ataques CSRF y acceso desde sitios maliciosos.
+
+3. **Falta de Validación de Firma JWT:**
+El código actual solo decodifica el payload del JWT sin validar:
+- Firma del token
+- Expiración (exp)
+- Emisor (iss)
+- Audiencia (aud)
+
+### **Ejemplo de ejecución:**
+
+**Escenario de ataque:**
+```javascript
+// Un atacante puede crear un JWT falso:
+const fakePayload = { sub: "user_123" };
+const fakeToken = "header." + btoa(JSON.stringify(fakePayload)) + ".fake_signature";
+
+// Request malicioso desde sitio externo:
+fetch("https://api.example.com/user/profile", {
+    headers: {
+        "Authorization": `Bearer ${fakeToken}`,
+        "Origin": "https://malicious-site.com"
+    }
+});
+```
+
+**Resultado actual:** El sistema acepta el token falso y devuelve información de sesión.
+
+### **Soluciones propuestas:**
+
+#### **1. Implementar validación JWT completa:**
+```javascript
+const jwt = require('jsonwebtoken');
+
+// En profile_service.js
+let userId = "guest";
+if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+        const token = authHeader.split(" ")[1];
+        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        userId = payload.sub;
+    } catch (e) {
+        return {
+            statusCode: 401,
+            headers: { "Access-Control-Allow-Origin": origin },
+            body: JSON.stringify({ error: "Invalid token" })
+        };
+    }
+}
+```
+
+#### **2. Configurar CORS restrictivo:**
+```yaml
+# En template.yaml
+Cors:
+  AllowMethods: "'GET,OPTIONS'"
+  AllowHeaders: "'Content-Type,Authorization,X-Session-Action'"
+  AllowOrigin: "'https://app-rewards-service.io'" # Solo origen legítimo
+```
+
+#### **3. Agregar validaciones adicionales:**
+```javascript
+// Validar expiración del token
+if (payload.exp && Date.now() >= payload.exp * 1000) {
+    throw new Error('Token expired');
+}
+
+// Validar emisor
+if (payload.iss !== process.env.EXPECTED_ISSUER) {
+    throw new Error('Invalid issuer');
+}
+```
+
+#### **4. Implementar rate limiting y logging mejorado:**
+```javascript
+console.log(JSON.stringify({
+    level: "SECURITY",
+    event: "AuthenticationAttempt",
+    requestId: event.requestContext.requestId,
+    metadata: {
+        origin: origin,
+        userId: userId,
+        tokenValid: tokenValid,
+        ipAddress: event.requestContext.identity.sourceIp
+    }
+}));
+```
+
+#### **5. Variables de entorno necesarias:**
+```yaml
+Environment:
+  Variables:
+    TABLE_NAME: !Ref UserProfileTable
+    JWT_SECRET: !Ref JWTSecret
+    EXPECTED_ISSUER: "your-auth-service"
+```
+
+### **Recomendaciones adicionales:**
+
+1. **Implementar un servicio de autenticación centralizado** que maneje la validación JWT
+2. **Configurar WAF (Web Application Firewall)** para filtrar requests sospechosos
+3. **Implementar logging de seguridad** más detallado para detectar patrones de ataque
+4. **Actualizar Node.js** a una versión soportada
+5. **Implementar rotación de claves JWT** periódica
+
+La vulnerabilidad principal es la **falta de validación criptográfica del JWT**, que permite a cualquier atacante crear tokens falsos y acceder a información de sesión desde cualquier origen debido a la configuración CORS permisiva.

@@ -1,0 +1,53 @@
+Síntoma Reportado:
+"Dos transferencias bancarias entre las mismas cuentas quedaron bloqueadas indefinidamente sin completarse ni fallar"
+
+Flujo del Error:
+1. Setup inicial:
+   - Cuenta A tiene $1000
+   - Cuenta B tiene $500
+2. Usuario 1 inicia transferencia: $100 de A → B (Transaction T1)
+3. Usuario 2 inicia transferencia: $50 de B → A (Transaction T2)
+4. Ambas transacciones se ejecutan casi simultáneamente
+5. Lambda TransferFunds (T1):
+   - Adquiere lock en Cuenta A (usando DynamoDB conditional write)
+   - Intenta adquirir lock en Cuenta B
+   - Cuenta B ya está bloqueada por T2 → ESPERA
+6. Lambda TransferFunds (T2):
+   - Adquiere lock en Cuenta B
+   - Intenta adquirir lock en Cuenta A
+   - Cuenta A ya está bloqueada por T1 → ESPERA
+7. DEADLOCK: T1 espera a T2, T2 espera a T1
+8. Ambos Lambdas llegan a timeout (60 segundos) sin completar
+9. Locks quedan "huérfanos" en DynamoDB (no hay cleanup automático)
+10. Cuentas A y B quedan bloqueadas permanentemente para otras transacciones
+
+Causa Raíz:
+- No hay orden consistente de adquisición de locks (A→B vs B→A)
+- No hay timeout en la espera de locks (esperan indefinidamente hasta Lambda timeout)
+- No hay deadlock detection
+- No hay automatic lock cleanup cuando Lambda falla
+- Locks se implementan con TTL pero TTL de DynamoDB es eventual (puede tardar horas)
+
+Desafío para MCP:
+- Debe buscar logs de AMBAS transacciones concurrentes
+- Debe correlacionar que ambas están esperando locks
+- Debe identificar el orden de locks (T1: A→B, T2: B→A)
+- Debe buscar items de lock en DynamoDB (ver locks activos sin owner)
+- Debe entender el concepto de deadlock distribuido
+- Debe correlacionar timestamps de lock acquisition attempts
+- Debe buscar métricas de Lambda duration (ambos llegaron a timeout)
+
+Desafío sin-MCP:
+- El síntoma es vago: "transferencias bloqueadas"
+- ¿Cómo saber que hay dos transacciones involucradas?
+- Necesitaría logs de AMBAS + estado de locks en DynamoDB
+- Sin entender el orden de locks, imposible diagnosticar deadlock
+- Es un problema emergente de concurrencia, difícil de reproducir
+
+Preguntas:
+2.- La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas.
+3.- La aplicación realiza transferencias entre cuentas, a veces las cuentas quedan bloqueadas. la aplicación deberia funcionar como sigue:
+- La aplicacion expone endpoints en una api rest para realizar transferencias entre cuentas
+- Antes de transferir debe generar un identificador de transaccion
+- Se debe reservar los fondos y llamar a un servicio que valida la integridad de estos
+- Posterior a la validacion se realiza la transferencia y se libera la reserva

@@ -1,0 +1,104 @@
+## Traspaso fallido de póliza 144534: Prima de carga calculada como cero
+
+### Summary: La variable de entorno `BASE_COVERAGE` no está configurada (o es `0`), lo que produce una prima calculada en cero para los dependientes, disparando una regla de negocio que bloquea el traspaso.
+
+### Severity: High
+
+---
+
+### Root Cause Analysis
+
+**Patrón en los logs**
+
+El log group `/aws/lambda/TransferPolicyFunction` muestra el mismo error disparándose cada 5 minutos de forma ininterrumpida en los últimos 3 días:
+
+```
+[ERROR] BusinessRuleException: Prima de carga no puede ser cero
+```
+
+No existe ningún registro con el `policy_id` 144534 explícito, lo que indica que el log no registra el ID de la póliza — pero el error es inequívoco y se reproduce en cada intento de traspaso que involucre dependientes.
+
+---
+
+**Flujo de ejecución afectado — `transfer_policy.py`**
+
+| Paso | Linea | Descripción |
+|------|-------|-------------|
+| 1 | 48 | `cobertura_base = Decimal(os.environ.get('BASE_COVERAGE', '0'))` |
+| 2 | 59 | Se calcula la prima del titular: `prima_titular = cobertura_base * factor` |
+| 3 | 63 | Para cada dependiente: `prima_carga = cobertura_base * factor` |
+| 4 | 65–67 | `if prima_carga == 0` → se lanza `BusinessRuleException` |
+
+**El defecto:** El valor por defecto del `os.environ.get` es `'0'` (`transfer_policy.py:48`). Si la variable de entorno `BASE_COVERAGE` no está definida en la configuración Lambda, `cobertura_base` toma el valor `Decimal('0')`.
+
+Con `cobertura_base = 0`:
+```
+prima_carga = 0 * factor = 0   →   condición prima_carga == 0 es True   →   excepción
+```
+
+**Ubicación del bug:** `src/backend/transfer_policy.py:48`
+
+---
+
+**Inconsistencia secundaria**
+
+La prima del titular (`prima_titular`) nunca es validada contra cero (`transfer_policy.py:59-60`), pero la de cada dependiente sí lo es (`transfer_policy.py:65-67`). Si la póliza 144534 tiene al menos un dependiente, el traspaso siempre falla cuando `BASE_COVERAGE = 0`.
+
+---
+
+**Expected vs. Actual**
+
+| | Esperado | Actual |
+|---|---|---|
+| `BASE_COVERAGE` | Valor positivo configurado en la Lambda | `'0'` (valor por defecto del código) |
+| `prima_carga` | > 0 | `0` |
+| HTTP response | `200 - Traspaso exitoso` | `422 - No se puede traspasar póliza: Prima inválida` |
+
+---
+
+**Pasos para reproducir**
+
+1. Invocar la Lambda con `body = {"policy_id": "144534"}`.
+2. La póliza tiene dependientes registrados en DynamoDB.
+3. La variable de entorno `BASE_COVERAGE` no está definida en la función Lambda (o está en `0`).
+4. Resultado: HTTP 422 con `"error": "No se puede traspasar póliza: Prima inválida"`.
+
+---
+
+### Solution
+
+**Corrección inmediata — Configuración Lambda**
+
+Definir la variable de entorno `BASE_COVERAGE` con el valor de cobertura base correcto en la configuración de la función Lambda (ej. `100000`).
+
+**Corrección en el código — `transfer_policy.py:48`**
+
+Reemplazar el default silencioso `'0'` por una falla explícita si la variable no está configurada:
+
+```python
+# Antes (línea 48) — default silencioso que produce prima = 0
+cobertura_base = Decimal(os.environ.get('BASE_COVERAGE', '0'))
+
+# Después — falla rápido si la configuración falta
+raw = os.environ.get('BASE_COVERAGE')
+if not raw:
+    raise ValueError("Variable de entorno BASE_COVERAGE no configurada")
+cobertura_base = Decimal(raw)
+```
+
+**Corrección adicional — validar también la prima del titular**
+
+La prima del titular tampoco debería ser cero. Agregar la misma validación después de `transfer_policy.py:60`:
+
+```python
+if prima_titular == 0:
+    raise BusinessRuleException("Prima del titular no puede ser cero")
+```
+
+# Total cost USD
+
+0.368645
+
+# Execution time in seconds: 
+
+66

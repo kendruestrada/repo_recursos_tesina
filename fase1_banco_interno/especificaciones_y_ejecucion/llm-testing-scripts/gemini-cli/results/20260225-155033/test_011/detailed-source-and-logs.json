@@ -1,0 +1,54 @@
+{
+  "session_id": "c6211c2e-f160-4ee0-ad74-51a6dbe9838b",
+  "response": "## [Envios Duplicados]: Reintentos de SQS por error de validacion en la API de correos\n### Resumen: La funcion de envio de correos envia el payload con un nombre de campo incorrecto, provocando un error en la API externa y forzando a SQS a reintentar la ejecucion multiples veces.\n### Severidad: High\n### Analisis de causa raiz\n- Pasos para reproducir:\n  1. Un cliente finaliza una compra y `ProcessOrderFunction` deposita el mensaje de confirmacion en la cola SQS.\n  2. `EmailSenderFunction` toma el mensaje y realiza una peticion POST a la API de correos (`EMAIL_SERVICE_URL`).\n  3. En la peticion POST, se utiliza la clave `\"email\"` en lugar del campo requerido `\"customer_email\"`.\n  4. La API externa de correos procesa el evento pero responde con un error de validacion indicando campos faltantes.\n  5. La Lambda captura el codigo de error (distinto a 200), registra el fallo y lanza una excepcion (`raise Exception`).\n  6. Debido a la excepcion, la funcion Lambda termina anormalmente. SQS asume que el procesamiento fallo y vuelve a encolar y entregar el mensaje hasta agotar los reintentos (5 veces), causando la duplicacion de envios de correos al cliente.\n- Esperado vs. Actual:\n  - Esperado: Si ingresa el dato de correo, el payload enviado a la API deberia ser un objeto como `{\"customer_email\": \"test@test.com\", \"order_id\": \"123\", \"amount\": 100}`. Esto retornaria un HTTP 200, concluyendo la Lambda exitosamente y eliminando el mensaje de la cola SQS sin retornos.\n  - Actual: El payload se construye incorrectamente como `{\"email\": \"test@test.com\", \"order_id\": \"123\", \"amount\": 100}`. Esto desencadena un HTTP 400 en la API, una excepcion en el codigo y multiples reintentos iterativos por parte de SQS.\n- Ubicacion del error (file/function): `email_sender/app.py` / funcion `lambda_handler`\n- Logs relevantes:\n  ```text\n  Error al enviar correo para la orden 67d12459-a8b7-49a1-8590-ff58c8345359: {\"message\": \"Missing required fields: order_id, customer_email, amount\"}\n  \n  [ERROR] Exception: Error al enviar correo\n  Traceback (most recent call last):\n    File \"/var/task/app.py\", line 27, in lambda_handler\n      raise Exception(\"Error al enviar correo\")\n  ```\n### Propuesta de Solucion\n1. **Solucion Directa (Mapeo de Datos)**: Corregir el diccionario JSON en `email_sender/app.py` para coincidir con la especificacion de la API externa.\n   ```python\n   response = requests.post(\n       EMAIL_SERVICE_URL,\n       json={\"customer_email\": email, \"order_id\": order_id, \"amount\": amount},\n   )\n   ```\n2. **Solucion Alternativa (Control de Flujo)**: Identificar errores no recuperables (HTTP 4xx por mala estructura). En lugar de arrojar una excepcion indiscriminadamente, registrar el error en los logs y retornar un estado de salida exitoso a SQS para que el mensaje no siga reintentandose. La excepcion solo deberia lanzarse ante problemas de infraestructura temporales (ej. HTTP 5xx o timeout).\n3. **Pruebas y Configuracion Adicional**: Implementar una Dead Letter Queue (DLQ) en la cola origen SQS. Esto ayudara a derivar de forma controlada aquellos eventos que excedan un umbral prudente de reintentos (por ejemplo, maximo 2), permitiendo analizar el estado de los datos malformados sin causar problemas reiterados al usuario final.",
+  "stats": {
+    "models": {
+      "gemini-3.1-pro-preview": {
+        "api": {
+          "totalRequests": 2,
+          "totalErrors": 0,
+          "totalLatencyMs": 90305
+        },
+        "tokens": {
+          "input": 39498,
+          "prompt": 55712,
+          "candidates": 983,
+          "total": 62188,
+          "cached": 16214,
+          "thoughts": 5493,
+          "tool": 0
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 1,
+      "totalSuccess": 1,
+      "totalFail": 0,
+      "totalDurationMs": 3581,
+      "totalDecisions": {
+        "accept": 1,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "search_logs_multi": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 3581,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 0,
+      "totalLinesRemoved": 0
+    }
+  }
+}

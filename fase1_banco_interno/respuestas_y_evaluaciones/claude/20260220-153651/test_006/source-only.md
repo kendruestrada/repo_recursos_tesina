@@ -1,0 +1,112 @@
+Con toda la información del código fuente y la infraestructura, puedo identificar el bug. Aquí está el análisis completo:
+
+---
+
+## [BUG] Ventana de Cache Desactualizado por Orden de Operaciones Incorrecto en CacheInvalidationFunction
+
+### Summary
+La invalidación del cache Redis ocurre **después** de una llamada HTTP externa bloqueante, creando una ventana de tiempo donde el precio en cache es obsoleto y causando rechazos legítimos en el checkout.
+
+### Severity: **Critical**
+
+---
+
+### Root Cause Analysis
+
+**Flujo del sistema al actualizar un precio:**
+
+1. Admin llama `PUT /admin/product/{productId}/price` → `UpdatePriceFunction` actualiza DynamoDB con el nuevo precio.
+2. El DynamoDB Stream dispara `CacheInvalidationFunction` de forma asíncrona (con latencia adicional propia del stream).
+3. `CacheInvalidationFunction` ejecuta primero la llamada HTTP externa y **solo después** invalida el cache.
+
+**Secuencia del bug en `cache_invalidation/app.py:41-54`:**
+
+```
+DynamoDB actualizado (precio nuevo)
+        |
+        v
+CacheInvalidationFunction se dispara
+        |
+        v
+requests.get(PROCESSOR_API_URL)  <-- BLOQUEA (segundos de latencia)
+        |
+        | [VENTANA DE STALE CACHE]
+        | - ProductPricingFunction devuelve precio VIEJO desde Redis
+        | - Usuario ve precio antiguo en la UI
+        | - Usuario intenta checkout con precio antiguo
+        |
+        v
+redis_client.delete(cache_key)   <-- Invalidación tardía
+```
+
+**Colisión en el checkout:**
+
+Cuando el usuario hace checkout durante la ventana de stale cache:
+
+- `checkout/app.py` envía el precio viejo (del cache) a `InventoryCheckFunction`
+- `inventory_check/app.py:28` lee el precio **directamente desde DynamoDB** (ya actualizado)
+- La comparación en `inventory_check/app.py:38` falla:
+  ```python
+  if abs(db_price - expected_price) > 0.01:
+      return {"valid": False, "error": "Precio manipulado o desactualizado"}
+  ```
+- El checkout es rechazado legítimamente como "Precio manipulado o desactualizado", aunque el usuario no hizo nada incorrecto.
+
+**Ubicación del bug:**
+
+- Archivo: `cache_invalidation/app.py`
+- Líneas: `41-54`
+- Problema: `redis_client.delete(cache_key)` está posicionado después del bloque `try/except` de `requests.get(PROCESSOR_API_URL)`, siendo dependiente del tiempo de respuesta de esa API externa.
+
+**Pasos para reproducir:**
+
+1. El cache tiene `price:PROD-001 = 100.00` en Redis.
+2. Admin actualiza el precio de PROD-001 a `120.00` en DynamoDB.
+3. Antes de que `CacheInvalidationFunction` termine (mientras `requests.get` está en curso), un usuario consulta el precio → obtiene `100.00` desde cache.
+4. El usuario envía checkout con `price=100.00`.
+5. `InventoryCheckFunction` lee `120.00` desde DynamoDB.
+6. `abs(120.00 - 100.00) = 20.00 > 0.01` → checkout rechazado.
+
+**Expected vs. Actual:**
+
+| | Esperado | Actual |
+|---|---|---|
+| Checkout post-update | Exitoso (precio actualizado ya visible) | Rechazado con "Precio manipulado o desactualizado" |
+| Cache tras update DB | Invalidado inmediatamente | Invalidado con retraso (duración de HTTP call) |
+
+---
+
+### Solution
+
+Mover `redis_client.delete(cache_key)` **antes** de la llamada HTTP externa, para que la invalidación sea inmediata al detectar el cambio en DynamoDB:
+
+```python
+# cache_invalidation/app.py
+
+# CORRECTO: invalidar cache PRIMERO
+cache_key = f"price:{product_id}"
+deleted = redis_client.delete(cache_key)
+
+logger.info(
+    "Cache invalidado", productId=product_id, cacheEliminado=bool(deleted)
+)
+
+# Luego llamar a la API externa (ya no bloquea el cache)
+try:
+    response = requests.get(PROCESSOR_API_URL)
+    logger.info(
+        "Llamada a API externa completada", statusCode=response.status_code
+    )
+except Exception as e:
+    logger.error("Error llamando a API externa", error=str(e))
+```
+
+Esto garantiza que en cuanto el DynamoDB Stream notifique el cambio de precio, el cache quede invalidado de inmediato — antes de cualquier latencia de red hacia la API externa — eliminando la ventana de stale cache y los falsos rechazos en el checkout.
+
+# Total cost USD
+
+0.3272995000000001
+
+# Execution time in seconds: 
+
+88

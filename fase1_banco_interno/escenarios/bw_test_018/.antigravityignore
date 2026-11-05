@@ -1,0 +1,6 @@
+node_modules/
+cdk.out/
+.git/
+dist/
+build/
+.aws-sam/
