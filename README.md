@@ -54,4 +54,4 @@ cuenta, URLs) antes de usarlos.
 
 ## Autor
 
-Experto1 Estrada Rodríguez. Profesor guía: Ricardo Ñanculef.
+Experto1 Estrada Rodríguez. Profesor guía: Ricardo Ñanculef, Iván Pizarro.
